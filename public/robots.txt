@@ -1,0 +1,9 @@
+User-agent: *
+Allow: /
+Disallow: /chat
+Disallow: /chat/
+Disallow: /profile
+Disallow: /tools/
+Disallow: /api/
+
+Sitemap: https://teksafe.ai/sitemap.xml
