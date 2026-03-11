@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { createClient } from '@supabase/supabase-js';
-import { createStreamingCompletion, createChatCompletion } from '../src/lib/deepseek';
+import { createStreamingCompletion } from './_lib/deepseek';
 import {
   embedQuery,
   searchKnowledgeBase,
@@ -9,7 +9,7 @@ import {
   cleanResponse,
   generateTitle,
   type KBChunk,
-} from '../src/lib/rag';
+} from './_lib/rag';
 
 // Body parser enabled (default for Vercel Node functions)
 export const config = { api: { bodyParser: true } };
@@ -65,8 +65,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   res.setHeader('Cache-Control', 'no-cache');
   res.setHeader('Connection', 'keep-alive');
   res.setHeader('X-Accel-Buffering', 'no');
-  // Flush headers immediately so Vercel doesn't buffer the SSE stream
-  res.flushHeaders();
+  try { res.flushHeaders(); } catch { /* socket may already be closed */ }
 
   const send = (data: object) => {
     try { res.write(`data: ${JSON.stringify(data)}\n\n`); } catch { /* client disconnected */ }

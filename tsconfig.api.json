@@ -13,8 +13,6 @@
   },
   "include": [
     "api/**/*.ts",
-    "src/lib/deepseek.ts",
-    "src/lib/rag.ts",
     "src/types/index.ts"
   ]
 }
