@@ -64,9 +64,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache');
   res.setHeader('Connection', 'keep-alive');
-  res.setHeader('X-Accel-Buffering', 'no'); // disable Nginx buffering if present
+  res.setHeader('X-Accel-Buffering', 'no');
+  // Flush headers immediately so Vercel doesn't buffer the SSE stream
+  res.flushHeaders();
 
-  const send = (data: object) => res.write(`data: ${JSON.stringify(data)}\n\n`);
+  const send = (data: object) => {
+    try { res.write(`data: ${JSON.stringify(data)}\n\n`); } catch { /* client disconnected */ }
+  };
 
   try {
     // 1. Resolve Supabase user from Clerk ID
@@ -238,8 +242,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     res.end();
   } catch (error) {
     const msg = error instanceof Error ? error.message : 'Internal server error';
-    console.error('Chat API error:', msg);
-    send({ type: 'error', message: 'Something went wrong. Please try again.' });
-    res.end();
+    console.error('Chat API error:', msg, error);
+    send({ type: 'error', message: `Error: ${msg}` });
+    try { res.end(); } catch { /* already ended */ }
   }
 }

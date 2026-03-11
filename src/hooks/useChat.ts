@@ -27,7 +27,9 @@ export function useChat(conversationId?: string, clerkUserId?: string) {
   const [isStreaming, setIsStreaming] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
 
-  // Load persisted messages when conversation changes
+  // Load persisted messages when conversation changes.
+  // Guard: if optimistic messages are already in state (mid-send race),
+  // keep them rather than overwriting with an empty DB result.
   useEffect(() => {
     if (!conversationId) {
       setMessages([]);
@@ -43,7 +45,14 @@ export function useChat(conversationId?: string, clerkUserId?: string) {
         data: Message[] | null;
         error: unknown;
       };
-      if (!cancelled && result.data) setMessages(result.data);
+      if (!cancelled && result.data) {
+        setMessages((current) => {
+          // If DB returned empty but we already have optimistic messages
+          // from a send-in-progress, don't wipe them.
+          if (result.data!.length === 0 && current.length > 0) return current;
+          return result.data!;
+        });
+      }
     };
     load();
     return () => { cancelled = true; };
