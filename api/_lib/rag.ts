@@ -3,8 +3,8 @@
  * Lives under api/_lib/ so Vercel bundles it with the function correctly.
  */
 
-import { createChatCompletion } from './deepseek';
-import type { ChatMessage } from './deepseek';
+import { createChatCompletion } from './deepseek.js';
+import type { ChatMessage } from './deepseek.js';
 
 // ─── System Prompt ────────────────────────────────────────────────────────────
 

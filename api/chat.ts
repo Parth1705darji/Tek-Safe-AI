@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { createClient } from '@supabase/supabase-js';
-import { createStreamingCompletion } from './_lib/deepseek';
+import { createStreamingCompletion } from './_lib/deepseek.js';
 import {
   embedQuery,
   searchKnowledgeBase,
@@ -9,7 +9,7 @@ import {
   cleanResponse,
   generateTitle,
   type KBChunk,
-} from './_lib/rag';
+} from './_lib/rag.js';
 
 // Body parser enabled (default for Vercel Node functions)
 export const config = { api: { bodyParser: true } };
