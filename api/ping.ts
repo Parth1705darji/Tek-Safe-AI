@@ -1,7 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 
 export default function handler(_req: VercelRequest, res: VercelResponse) {
-  res.json({
+  const payload = JSON.stringify({
     ok: true,
     time: new Date().toISOString(),
     node: process.version,
@@ -11,4 +11,7 @@ export default function handler(_req: VercelRequest, res: VercelResponse) {
       hasDeepSeek: !!process.env.DEEPSEEK_API_KEY,
     },
   });
+  res.setHeader('Content-Type', 'application/json');
+  res.statusCode = 200;
+  res.end(payload);
 }

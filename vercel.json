@@ -1,10 +1,5 @@
 {
-  "devCommand": "vite --port 5173",
   "rewrites": [
-    {
-      "source": "/api/(.*)",
-      "destination": "/api/$1"
-    },
     {
       "source": "/((?!api/.*).*)",
       "destination": "/index.html"
@@ -43,8 +38,13 @@
     }
   ],
   "functions": {
-    "api/**/*.ts": {
-      "maxDuration": 30
-    }
+    "api/chat.ts": { "maxDuration": 30 },
+    "api/ping.ts": { "maxDuration": 10 },
+    "api/conversations.ts": { "maxDuration": 10 },
+    "api/feedback.ts": { "maxDuration": 10 },
+    "api/tools/breach-check.ts": { "maxDuration": 15 },
+    "api/tools/url-scan.ts": { "maxDuration": 15 },
+    "api/tools/ip-check.ts": { "maxDuration": 15 },
+    "api/webhooks/clerk.ts": { "maxDuration": 10 }
   }
 }
