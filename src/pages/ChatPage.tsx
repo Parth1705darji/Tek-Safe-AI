@@ -24,30 +24,27 @@ const ChatPage = () => {
   const [dbUserLoading, setDbUserLoading] = useState(true);
   const [dbUserError, setDbUserError] = useState(false);
 
-  // Fetch Supabase user record using authenticated client
+  // Fetch Supabase user record — called on mount and after each message
+  const refetchUser = useCallback(async () => {
+    if (!clerkUser) return;
+    const result = (await supabase
+      .from('users')
+      .select('*')
+      .eq('clerk_id', clerkUser.id)
+      .single()) as { data: User | null; error: unknown };
+    if (result.data) {
+      setDbUser(result.data);
+      setDbUserError(false);
+    } else {
+      setDbUserError(true);
+    }
+  }, [clerkUser, supabase]);
+
   useEffect(() => {
     if (!isLoaded || !clerkUser) return;
-    let cancelled = false;
-    const fetchUser = async () => {
-      setDbUserLoading(true);
-      setDbUserError(false);
-      const result = (await supabase
-        .from('users')
-        .select('*')
-        .eq('clerk_id', clerkUser.id)
-        .single()) as { data: User | null; error: unknown };
-      if (!cancelled) {
-        if (result.data) {
-          setDbUser(result.data);
-        } else {
-          setDbUserError(true);
-        }
-        setDbUserLoading(false);
-      }
-    };
-    fetchUser();
-    return () => { cancelled = true; };
-  }, [isLoaded, clerkUser, supabase]);
+    setDbUserLoading(true);
+    refetchUser().finally(() => setDbUserLoading(false));
+  }, [isLoaded, clerkUser, refetchUser]);
 
   const {
     groupedConversations,
@@ -118,10 +115,11 @@ const ChatPage = () => {
 
       await sendMessage(content, convId);
 
-      // Refresh sidebar to pick up updated title and sort order
+      // Refresh sidebar title/sort order and user message count in parallel
       refetchConversations();
+      refetchUser();
     },
-    [conversationId, dbUser, createConversation, navigate, sendMessage, refetchConversations]
+    [conversationId, dbUser, createConversation, navigate, sendMessage, refetchConversations, refetchUser]
   );
 
   const handleDeleteConversation = useCallback(
