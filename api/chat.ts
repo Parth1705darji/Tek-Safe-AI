@@ -10,6 +10,12 @@ import {
   generateTitle,
   type KBChunk,
 } from './_lib/rag.js';
+import {
+  containsPII,
+  classifyInput,
+  scanOutputForPII,
+  isJailbreakResponse,
+} from './_lib/guardrails.js';
 
 // Body parser enabled (default for Vercel Node functions)
 export const config = { api: { bodyParser: true } };
@@ -95,6 +101,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       send({ type: 'error', message: 'Daily message limit reached. Resets at midnight.' });
       return res.end();
     }
+
+    // ── Guardrail: input checks ───────────────────────────────────────────────
+    if (containsPII(message.trim())) {
+      send({ type: 'error', message: "Please don't share sensitive information like passwords, OTPs, or Aadhaar numbers for your own security." });
+      return res.end();
+    }
+
+    const classification = await classifyInput(message.trim(), DEEPSEEK_KEY);
+    if (classification === 'off_topic') {
+      send({ type: 'info', message: "I specialise in tech support and cybersecurity. I can't help with that, but feel free to ask about device issues, security threats, or online safety!" });
+      return res.end();
+    }
+    if (classification === 'unsafe') {
+      send({ type: 'error', message: "I can't help with that request." });
+      return res.end();
+    }
+    // classification === 'safe' → continue (no DB write, no rate limit increment on blocked messages)
 
     // 3. Get chat history (last 10 messages for context)
     const { data: history } = await supabaseAdmin
@@ -185,7 +208,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     // 9. Parse tool triggers and clean response text
     const tools = parseToolTriggers(fullContent);
-    const cleanContent = cleanResponse(fullContent);
+
+    // ── Guardrail: output checks ──────────────────────────────────────────────
+    let safeContent = scanOutputForPII(fullContent);
+    if (isJailbreakResponse(safeContent)) {
+      safeContent = 'I can only assist with tech support and cybersecurity topics.';
+    }
+    const cleanContent = cleanResponse(safeContent);
 
     // 10. Save AI message to DB
     const sources = kbChunks.map((c) => ({

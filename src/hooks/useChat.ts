@@ -10,7 +10,8 @@ type SSEEvent =
   | { type: 'tool'; tool: Message['tool_used']; params: string }
   | { type: 'title'; title: string }
   | { type: 'done'; messageId: string | null }
-  | { type: 'error'; message: string };
+  | { type: 'error'; message: string }
+  | { type: 'info'; message: string };
 
 const TOOL_ENDPOINT: Record<string, string> = {
   breach_check: 'breach-check',
@@ -103,6 +104,26 @@ export function useChat(conversationId?: string, clerkUserId?: string) {
       // Add AI placeholder immediately so errors are always visible to the user
       setMessages((prev) => [...prev, aiMsg]);
 
+      // Layer 1: Client-side PII warning (non-blocking — server also enforces this)
+      const CLIENT_PII = [
+        /\bpassword\s*(is|[:=])\s*\S+/i,
+        /\bpwd\s*(is|[:=])\s*\S+/i,
+        /\bpasscode\s*(is|[:=])\s*\S+/i,
+        /\b(otp|one[\s-]time\s*pass(?:word|code)?)\s*(is|[:=])\s*\d{4,8}/i,
+        /\bpin\s*(is|[:=])\s*\d{4,8}/i,
+        /\b\d{4}[\s-]?\d{4}[\s-]?\d{4}\b/,
+        /\b(?:\d[ -]?){13,19}\b/,
+      ];
+      if (CLIENT_PII.some((re) => re.test(content.trim()))) {
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === aiMsgLocalId
+              ? { ...m, content: "⚠️ For your safety, please don't share passwords, OTPs, or Aadhaar numbers. Please rephrase without sensitive data." }
+              : m
+          )
+        );
+      }
+
       try {
         const response = await fetch('/api/chat', {
           method: 'POST',
@@ -193,6 +214,16 @@ export function useChat(conversationId?: string, clerkUserId?: string) {
                     prev.map((m) =>
                       m.id === aiMsgLocalId
                         ? { ...m, content: `⚠️ ${event.message}` }
+                        : m
+                    )
+                  );
+                  break;
+
+                case 'info':
+                  setMessages((prev) =>
+                    prev.map((m) =>
+                      m.id === aiMsgLocalId
+                        ? { ...m, content: `ℹ️ ${event.message}` }
                         : m
                     )
                   );
