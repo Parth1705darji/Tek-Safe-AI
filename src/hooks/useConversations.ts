@@ -54,7 +54,7 @@ export function useConversations(userId?: string) {
     fetchConversations();
   }, [fetchConversations]);
 
-  const createConversation = async (uid: string): Promise<Conversation | null> => {
+  const createConversation = useCallback(async (uid: string): Promise<Conversation | null> => {
     const result = (await supabase
       .from('conversations')
       .insert({ user_id: uid, title: 'New Chat' })
@@ -65,17 +65,17 @@ export function useConversations(userId?: string) {
       return result.data;
     }
     return null;
-  };
+  }, [supabase]);
 
-  const renameConversation = async (id: string, title: string) => {
+  const renameConversation = useCallback(async (id: string, title: string) => {
     await supabase.from('conversations').update({ title }).eq('id', id);
     setConversations((prev) => prev.map((c) => (c.id === id ? { ...c, title } : c)));
-  };
+  }, [supabase]);
 
-  const deleteConversation = async (id: string) => {
+  const deleteConversation = useCallback(async (id: string) => {
     await supabase.from('conversations').delete().eq('id', id);
     setConversations((prev) => prev.filter((c) => c.id !== id));
-  };
+  }, [supabase]);
 
   return {
     conversations,

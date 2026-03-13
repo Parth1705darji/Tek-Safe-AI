@@ -169,6 +169,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       content: message.trim(),
     });
 
+    // 5b. Start title generation concurrently with streaming (uses only the user message).
+    // Running it in parallel means it's usually done before streaming ends → zero added latency.
+    let titlePromise: Promise<void> | null = null;
+    if (isFirstMessage) {
+      titlePromise = (async () => {
+        const title = await generateTitle(message.trim(), DEEPSEEK_KEY);
+        await supabaseAdmin.from('conversations').update({ title }).eq('id', conversationId);
+        send({ type: 'title', title });
+      })().catch((e) => console.warn('Title generation failed (non-fatal):', (e as Error).message));
+    }
+
     // 6. Embed query + vector search KB (non-fatal if fails)
     let kbChunks: KBChunk[] = [];
     try {
@@ -270,19 +281,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       send({ type: 'tool', tool: tools[0].type, params: tools[0].params });
     }
 
-    // 12. Auto-generate conversation title on first message
-    if (isFirstMessage) {
-      try {
-        const title = await generateTitle(message.trim(), DEEPSEEK_KEY);
-        await supabaseAdmin
-          .from('conversations')
-          .update({ title })
-          .eq('id', conversationId);
-        send({ type: 'title', title });
-      } catch (e) {
-        console.warn('Title generation failed (non-fatal):', (e as Error).message);
-      }
-    }
+    // 12. Await title generation (started concurrently in step 5b — usually already done)
+    if (titlePromise) await titlePromise;
 
     // 13. Increment daily message count
     const isPastReset = !resetAt || resetAt <= now;

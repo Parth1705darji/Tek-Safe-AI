@@ -115,7 +115,13 @@ const ChatPage = () => {
 
       await sendMessage(content, convId);
 
-      // Refresh sidebar title/sort order and user message count in parallel
+      // Optimistically increment counter so it updates the instant the message finishes.
+      // refetchUser() below corrects it with the true DB value within ~200 ms.
+      setDbUser((prev) =>
+        prev ? { ...prev, daily_message_count: (prev.daily_message_count ?? 0) + 1 } : prev
+      );
+
+      // Refresh sidebar title/sort order and accurate message count in background
       refetchConversations();
       refetchUser();
     },

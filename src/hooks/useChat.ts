@@ -102,31 +102,24 @@ export function useChat(conversationId?: string, clerkUserId?: string) {
       // Track tool trigger and real DB ID within this send cycle
       let pendingTool: { tool: Message['tool_used']; params: string } | null = null;
       let finalMsgId: string = aiMsgLocalId;
+      // Flag: did we add the AI placeholder to state yet?
+      let aiMsgAdded = false;
 
-      // Add AI placeholder immediately so errors are always visible to the user
-      setMessages((prev) => [...prev, aiMsg]);
+      // Layer 1: Client-side PII warning (non-blocking — server also enforces this)
+      const CLIENT_PII = [
+        /\bpassword\s*(is|[:=])\s*\S+/i,
+        /\bpwd\s*(is|[:=])\s*\S+/i,
+        /\bpasscode\s*(is|[:=])\s*\S+/i,
+        /\b(otp|one[\s-]time\s*pass(?:word|code)?)\s*(is|[:=])\s*\d{4,8}/i,
+        /\bpin\s*(is|[:=])\s*\d{4,8}/i,
+        /\b\d{4}[\s-]?\d{4}[\s-]?\d{4}\b/,
+        /\b(?:\d[ -]?){13,19}\b/,
+      ];
+      const piiWarning = CLIENT_PII.some((re) => re.test(content.trim()))
+        ? "⚠️ For your safety, please don't share passwords, OTPs, or Aadhaar numbers. Please rephrase without sensitive data."
+        : '';
 
       try {
-        // Layer 1: Client-side PII warning (non-blocking — server also enforces this)
-        const CLIENT_PII = [
-          /\bpassword\s*(is|[:=])\s*\S+/i,
-          /\bpwd\s*(is|[:=])\s*\S+/i,
-          /\bpasscode\s*(is|[:=])\s*\S+/i,
-          /\b(otp|one[\s-]time\s*pass(?:word|code)?)\s*(is|[:=])\s*\d{4,8}/i,
-          /\bpin\s*(is|[:=])\s*\d{4,8}/i,
-          /\b\d{4}[\s-]?\d{4}[\s-]?\d{4}\b/,
-          /\b(?:\d[ -]?){13,19}\b/,
-        ];
-        if (CLIENT_PII.some((re) => re.test(content.trim()))) {
-          setMessages((prev) =>
-            prev.map((m) =>
-              m.id === aiMsgLocalId
-                ? { ...m, content: "⚠️ For your safety, please don't share passwords, OTPs, or Aadhaar numbers. Please rephrase without sensitive data." }
-                : m
-            )
-          );
-        }
-
         const response = await fetch('/api/chat', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -143,6 +136,11 @@ export function useChat(conversationId?: string, clerkUserId?: string) {
           throw new Error(`API error ${response.status}${errorText ? `: ${errorText.slice(0, 200)}` : ''}`);
         }
 
+        // Valid streaming response confirmed — add AI placeholder now.
+        // This prevents the double-bubble (LoadingIndicator + empty placeholder)
+        // that was visible while waiting for the fetch to resolve.
+        setMessages((prev) => [...prev, { ...aiMsg, content: piiWarning }]);
+        aiMsgAdded = true;
         setIsLoading(false);
         setIsStreaming(true);
 
@@ -283,13 +281,13 @@ export function useChat(conversationId?: string, clerkUserId?: string) {
             ? '⚠️ Could not reach the server. Make sure you are running `vercel dev` (not `vite`), then refresh.'
             : `⚠️ ${errMsg || 'Something went wrong. Please try again.'}`;
           console.error('Chat API error:', errMsg);
-          setMessages((prev) =>
-            prev.map((m) =>
-              m.id === aiMsgLocalId
-                ? { ...m, content: displayMsg }
-                : m
-            )
-          );
+          setMessages((prev) => {
+            if (aiMsgAdded) {
+              return prev.map((m) => m.id === aiMsgLocalId ? { ...m, content: displayMsg } : m);
+            }
+            // Fetch failed before we added the placeholder — push error message directly
+            return [...prev, { ...aiMsg, content: displayMsg }];
+          });
         }
       } finally {
         setIsStreaming(false);
