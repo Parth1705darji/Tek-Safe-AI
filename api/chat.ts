@@ -155,12 +155,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       .order('created_at', { ascending: true })
       .limit(10);
 
-    // 4. Check if this is the first message (for auto-title)
-    const { count: msgCount } = await supabaseAdmin
-      .from('messages')
-      .select('*', { count: 'exact', head: true })
-      .eq('conversation_id', conversationId);
-    const isFirstMessage = (msgCount ?? 0) === 0;
+    // 4. Check if title needs generating (conversation still has default "New Chat" title)
+    const { data: convRow } = await supabaseAdmin
+      .from('conversations')
+      .select('title')
+      .eq('id', conversationId)
+      .single();
+    const isFirstMessage = !convRow?.title || convRow.title === 'New Chat';
 
     // 5. Save user message server-side
     await supabaseAdmin.from('messages').insert({
