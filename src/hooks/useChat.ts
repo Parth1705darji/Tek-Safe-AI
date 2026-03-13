@@ -48,9 +48,11 @@ export function useChat(conversationId?: string, clerkUserId?: string) {
       };
       if (!cancelled && result.data) {
         setMessages((current) => {
-          // If DB returned empty but we already have optimistic messages
-          // from a send-in-progress, don't wipe them.
-          if (result.data!.length === 0 && current.length > 0) return current;
+          // Merge DB messages with any in-flight optimistic messages
+          // (local UUIDs not yet persisted) so they are never wiped.
+          const dbIds = new Set(result.data!.map((m) => m.id));
+          const inFlight = current.filter((m) => !dbIds.has(m.id));
+          if (inFlight.length > 0) return [...result.data!, ...inFlight];
           return result.data!;
         });
       }
@@ -104,27 +106,27 @@ export function useChat(conversationId?: string, clerkUserId?: string) {
       // Add AI placeholder immediately so errors are always visible to the user
       setMessages((prev) => [...prev, aiMsg]);
 
-      // Layer 1: Client-side PII warning (non-blocking — server also enforces this)
-      const CLIENT_PII = [
-        /\bpassword\s*(is|[:=])\s*\S+/i,
-        /\bpwd\s*(is|[:=])\s*\S+/i,
-        /\bpasscode\s*(is|[:=])\s*\S+/i,
-        /\b(otp|one[\s-]time\s*pass(?:word|code)?)\s*(is|[:=])\s*\d{4,8}/i,
-        /\bpin\s*(is|[:=])\s*\d{4,8}/i,
-        /\b\d{4}[\s-]?\d{4}[\s-]?\d{4}\b/,
-        /\b(?:\d[ -]?){13,19}\b/,
-      ];
-      if (CLIENT_PII.some((re) => re.test(content.trim()))) {
-        setMessages((prev) =>
-          prev.map((m) =>
-            m.id === aiMsgLocalId
-              ? { ...m, content: "⚠️ For your safety, please don't share passwords, OTPs, or Aadhaar numbers. Please rephrase without sensitive data." }
-              : m
-          )
-        );
-      }
-
       try {
+        // Layer 1: Client-side PII warning (non-blocking — server also enforces this)
+        const CLIENT_PII = [
+          /\bpassword\s*(is|[:=])\s*\S+/i,
+          /\bpwd\s*(is|[:=])\s*\S+/i,
+          /\bpasscode\s*(is|[:=])\s*\S+/i,
+          /\b(otp|one[\s-]time\s*pass(?:word|code)?)\s*(is|[:=])\s*\d{4,8}/i,
+          /\bpin\s*(is|[:=])\s*\d{4,8}/i,
+          /\b\d{4}[\s-]?\d{4}[\s-]?\d{4}\b/,
+          /\b(?:\d[ -]?){13,19}\b/,
+        ];
+        if (CLIENT_PII.some((re) => re.test(content.trim()))) {
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === aiMsgLocalId
+                ? { ...m, content: "⚠️ For your safety, please don't share passwords, OTPs, or Aadhaar numbers. Please rephrase without sensitive data." }
+                : m
+            )
+          );
+        }
+
         const response = await fetch('/api/chat', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -289,11 +291,11 @@ export function useChat(conversationId?: string, clerkUserId?: string) {
             )
           );
         }
+      } finally {
+        setIsStreaming(false);
+        setIsLoading(false);
+        abortRef.current = null;
       }
-
-      setIsStreaming(false);
-      setIsLoading(false);
-      abortRef.current = null;
     },
     [isStreaming, clerkUserId, supabase]
   );

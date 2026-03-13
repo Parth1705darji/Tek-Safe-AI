@@ -40,18 +40,20 @@ export async function classifyInput(
   message: string,
   apiKey: string
 ): Promise<InputClassification> {
+  const classify = createChatCompletion(
+    {
+      messages: [
+        { role: 'system', content: CLASSIFICATION_SYSTEM_PROMPT },
+        { role: 'user', content: message.slice(0, 500) },
+      ],
+      temperature: 0.0,
+      max_tokens: 5,
+    },
+    apiKey
+  );
+  const timeout = new Promise<string>((resolve) => setTimeout(() => resolve('timeout'), 5000));
   try {
-    const raw = await createChatCompletion(
-      {
-        messages: [
-          { role: 'system', content: CLASSIFICATION_SYSTEM_PROMPT },
-          { role: 'user', content: message.slice(0, 500) },
-        ],
-        temperature: 0.0,
-        max_tokens: 5,
-      },
-      apiKey
-    );
+    const raw = await Promise.race([classify, timeout]);
     const label = raw.toLowerCase().replace(/[^a-z_]/g, '');
     if (label === 'off_topic' || label === 'unsafe') return label;
     return 'safe';

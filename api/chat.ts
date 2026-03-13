@@ -77,6 +77,25 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     try { res.write(`data: ${JSON.stringify(data)}\n\n`); } catch { /* client disconnected */ }
   };
 
+  // ── Helper: save a blocked interaction so it survives page refresh ───────────
+  const saveBlocked = async (userContent: string, aiContent: string): Promise<string | null> => {
+    try {
+      await supabaseAdmin.from('messages').insert({
+        conversation_id: conversationId,
+        role: 'user',
+        content: userContent,
+      });
+      const { data } = await supabaseAdmin
+        .from('messages')
+        .insert({ conversation_id: conversationId, role: 'assistant', content: aiContent })
+        .select('id')
+        .single();
+      return data?.id ?? null;
+    } catch {
+      return null;
+    }
+  };
+
   try {
     // 1. Resolve Supabase user from Clerk ID
     const { data: user } = await supabaseAdmin
@@ -104,17 +123,26 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     // ── Guardrail: input checks ───────────────────────────────────────────────
     if (containsPII(message.trim())) {
-      send({ type: 'error', message: "Please don't share sensitive information like passwords, OTPs, or Aadhaar numbers for your own security." });
+      const aiMsg = "Please don't share sensitive information like passwords, OTPs, or Aadhaar numbers for your own security.";
+      const msgId = await saveBlocked('[Message blocked: contains sensitive information]', `⚠️ ${aiMsg}`);
+      send({ type: 'error', message: aiMsg });
+      send({ type: 'done', messageId: msgId });
       return res.end();
     }
 
     const classification = await classifyInput(message.trim(), DEEPSEEK_KEY);
     if (classification === 'off_topic') {
-      send({ type: 'info', message: "I specialise in tech support and cybersecurity. I can't help with that, but feel free to ask about device issues, security threats, or online safety!" });
+      const aiMsg = "I specialise in tech support and cybersecurity. I can't help with that, but feel free to ask about device issues, security threats, or online safety!";
+      const msgId = await saveBlocked(message.trim(), `ℹ️ ${aiMsg}`);
+      send({ type: 'info', message: aiMsg });
+      send({ type: 'done', messageId: msgId });
       return res.end();
     }
     if (classification === 'unsafe') {
-      send({ type: 'error', message: "I can't help with that request." });
+      const aiMsg = "I can't help with that request.";
+      const msgId = await saveBlocked('[Message blocked: content policy violation]', `⚠️ ${aiMsg}`);
+      send({ type: 'error', message: aiMsg });
+      send({ type: 'done', messageId: msgId });
       return res.end();
     }
     // classification === 'safe' → continue (no DB write, no rate limit increment on blocked messages)
