@@ -3,6 +3,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Shield, Copy, Check } from 'lucide-react';
 import { formatRelativeTime } from '../../lib/utils';
+import { showToast } from '../common/Toast';
 import FeedbackWidget from './FeedbackWidget';
 import ToolCard from './ToolCard';
 import type { Message, BreachCheckResult, UrlScanResult, IpCheckResult } from '../../types';
@@ -15,6 +16,7 @@ function CodeBlock({ code, language }: { code: string; language?: string }) {
   const handleCopy = () => {
     navigator.clipboard.writeText(code).then(() => {
       setCopied(true);
+      showToast('Copied to clipboard');
       setTimeout(() => setCopied(false), 2000);
     });
   };
@@ -152,6 +154,7 @@ function CopyButton({ text }: { text: string }) {
   const handleCopy = () => {
     navigator.clipboard.writeText(text).then(() => {
       setCopied(true);
+      showToast('Copied to clipboard');
       setTimeout(() => setCopied(false), 2000);
     });
   };

@@ -21,6 +21,7 @@ const ChatPage = () => {
 
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [dbUser, setDbUser] = useState<User | null>(null);
+  const [activeTools, setActiveTools] = useState<string[]>([]);
   const [dbUserLoading, setDbUserLoading] = useState(true);
   const [dbUserError, setDbUserError] = useState(false);
 
@@ -55,7 +56,7 @@ const ChatPage = () => {
   } = useConversations(dbUser?.id);
 
   const { messages, isLoading, isStreaming, sendMessage, submitFeedback, stopGenerating } =
-    useChat(conversationId, clerkUser?.id);
+    useChat(conversationId, clerkUser?.id, activeTools);
 
   // Listen for title-update events dispatched by useChat when server generates a title
   useEffect(() => {
@@ -123,6 +124,22 @@ const ChatPage = () => {
     [conversationId, dbUser, createConversation, navigate, sendMessage, refetchConversations, refetchUser]
   );
 
+  const handleToolToggle = useCallback((tool: string) => {
+    setActiveTools((prev) =>
+      prev.includes(tool) ? prev.filter((t) => t !== tool) : [...prev, tool]
+    );
+  }, []);
+
+  // Compute active conversation title for header
+  const activeConversationTitle = conversationId
+    ? [
+        ...groupedConversations.today,
+        ...groupedConversations.yesterday,
+        ...groupedConversations.lastWeek,
+        ...groupedConversations.older,
+      ].find((c) => c.id === conversationId)?.title
+    : undefined;
+
   const handleDeleteConversation = useCallback(
     async (id: string) => {
       await deleteConversation(id);
@@ -136,7 +153,10 @@ const ChatPage = () => {
 
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-light-bg dark:bg-dark-bg">
-      <Header onMenuClick={() => setSidebarOpen(true)} />
+      <Header
+        onMenuClick={() => setSidebarOpen(true)}
+        conversationTitle={activeConversationTitle}
+      />
 
       <div className="flex flex-1 overflow-hidden">
         <Sidebar
@@ -175,6 +195,8 @@ const ChatPage = () => {
             isStreaming={isStreaming}
             messageCount={messageCount}
             messageLimit={messageLimit}
+            activeTools={activeTools}
+            onToolToggle={handleToolToggle}
           />
         </main>
       </div>

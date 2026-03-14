@@ -2,6 +2,7 @@ import { lazy, Suspense } from 'react';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import ErrorBoundary from './components/common/ErrorBoundary';
 import OfflineBanner from './components/common/OfflineBanner';
+import { ToastContainer } from './components/common/Toast';
 import ChatwootWidget from './components/common/ChatwootWidget';
 import ProtectedRoute from './components/auth/ProtectedRoute';
 import AuthWrapper from './components/auth/AuthWrapper';
@@ -83,6 +84,7 @@ function App() {
           </Routes>
         </Suspense>
         <ChatwootWidget />
+        <ToastContainer />
       </BrowserRouter>
     </ErrorBoundary>
   );

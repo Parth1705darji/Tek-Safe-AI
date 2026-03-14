@@ -1,0 +1,40 @@
+/* Design tokens — additive layer on top of Tailwind custom theme */
+:root {
+  /* Backgrounds */
+  --bg-primary: #0d1117;
+  --bg-sidebar: #0a0e13;
+  --bg-surface: #161b22;
+  --bg-elevated: #1c2128;
+  --bg-input: #1c2128;
+  --bg-hover: rgba(255, 255, 255, 0.04);
+  --bg-accent-dim: rgba(0, 212, 170, 0.10);
+
+  /* Text */
+  --text-primary: #e6edf3;
+  --text-secondary: #8b949e;
+  --text-muted: #484f58;
+  --text-accent: #00D4AA;
+
+  /* Borders */
+  --border-default: rgba(255, 255, 255, 0.08);
+  --border-accent: rgba(0, 212, 170, 0.25);
+  --border-strong: rgba(255, 255, 255, 0.15);
+
+  /* Accent */
+  --accent: #00D4AA;
+  --accent-hover: #00b88f;
+
+  /* Semantic */
+  --danger: #f85149;
+  --warning: #d29922;
+  --success: #3fb950;
+  --info: #58a6ff;
+
+  /* Radius */
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+
+  /* Transition */
+  --transition: all 0.15s ease;
+}

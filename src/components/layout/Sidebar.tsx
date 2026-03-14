@@ -6,6 +6,9 @@ import {
   Shield,
   Link2,
   Globe,
+  Lock,
+  Search,
+  FileSearch,
   MoreHorizontal,
   Pencil,
   Trash2,
@@ -159,10 +162,25 @@ function SidebarGroup({ label, conversations, activeId, onSelect, onRename, onDe
   );
 }
 
-const TOOLS = [
+// Tools that navigate to dedicated pages
+const ROUTE_TOOLS = [
   { icon: Shield, label: 'Breach Check', route: '/tools/breach-check' },
   { icon: Link2, label: 'URL Scanner', route: '/tools/url-scan' },
   { icon: Globe, label: 'IP Checker', route: '/tools/ip-check' },
+];
+
+// Tools that pre-fill chat with a security prompt
+const PROMPT_TOOLS = [
+  {
+    icon: Lock,
+    label: 'SSL Checker',
+    prompt: 'Check the SSL/TLS certificate status and security configuration for: [paste domain here]',
+  },
+  {
+    icon: FileSearch,
+    label: 'WHOIS Lookup',
+    prompt: 'Perform a WHOIS analysis on this domain and flag any suspicious registration patterns: [paste domain here]',
+  },
 ];
 
 const SidebarContent = ({
@@ -175,7 +193,18 @@ const SidebarContent = ({
   onClose,
 }: Omit<SidebarProps, 'isOpen'>) => {
   const navigate = useNavigate();
-  const setSidebarClosed = onClose;
+  const [search, setSearch] = useState('');
+
+  function filterGroup(convs: Conversation[]) {
+    if (!search.trim()) return convs;
+    const q = search.toLowerCase();
+    return convs.filter((c) => (c.title ?? '').toLowerCase().includes(q));
+  }
+
+  const handlePromptTool = (prompt: string) => {
+    onClose?.();
+    navigate('/chat', { state: { toolPrompt: prompt } });
+  };
 
   return (
     <div className="flex h-full flex-col">
@@ -190,40 +219,72 @@ const SidebarContent = ({
         </button>
       </div>
 
+      {/* Search bar */}
+      <div className="px-3 pb-2">
+        <div className="flex items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 px-3 py-1.5 dark:border-gray-700 dark:bg-gray-800/60">
+          <Search className="h-3.5 w-3.5 shrink-0 text-gray-400" />
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search conversations..."
+            className="flex-1 bg-transparent text-xs text-gray-700 placeholder-gray-400 outline-none dark:text-gray-300 dark:placeholder-gray-500"
+          />
+          {search && (
+            <button onClick={() => setSearch('')} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">
+              <X className="h-3 w-3" />
+            </button>
+          )}
+        </div>
+      </div>
+
       {/* Conversation list */}
       <div className="flex-1 overflow-y-auto px-1 py-1 scrollbar-chat">
-        <SidebarGroup
-          label="Today"
-          conversations={groupedConversations.today}
-          activeId={activeId}
-          onSelect={onSelectChat}
-          onRename={onRename}
-          onDelete={onDelete}
-        />
-        <SidebarGroup
-          label="Yesterday"
-          conversations={groupedConversations.yesterday}
-          activeId={activeId}
-          onSelect={onSelectChat}
-          onRename={onRename}
-          onDelete={onDelete}
-        />
-        <SidebarGroup
-          label="Previous 7 Days"
-          conversations={groupedConversations.lastWeek}
-          activeId={activeId}
-          onSelect={onSelectChat}
-          onRename={onRename}
-          onDelete={onDelete}
-        />
-        <SidebarGroup
-          label="Older"
-          conversations={groupedConversations.older}
-          activeId={activeId}
-          onSelect={onSelectChat}
-          onRename={onRename}
-          onDelete={onDelete}
-        />
+        {search.trim() && filterGroup([
+          ...groupedConversations.today,
+          ...groupedConversations.yesterday,
+          ...groupedConversations.lastWeek,
+          ...groupedConversations.older,
+        ]).length === 0 ? (
+          <p className="px-4 py-6 text-center text-xs text-gray-400 dark:text-gray-500">
+            No conversations match "{search}"
+          </p>
+        ) : (
+          <>
+            <SidebarGroup
+              label="Today"
+              conversations={filterGroup(groupedConversations.today)}
+              activeId={activeId}
+              onSelect={onSelectChat}
+              onRename={onRename}
+              onDelete={onDelete}
+            />
+            <SidebarGroup
+              label="Yesterday"
+              conversations={filterGroup(groupedConversations.yesterday)}
+              activeId={activeId}
+              onSelect={onSelectChat}
+              onRename={onRename}
+              onDelete={onDelete}
+            />
+            <SidebarGroup
+              label="Previous 7 Days"
+              conversations={filterGroup(groupedConversations.lastWeek)}
+              activeId={activeId}
+              onSelect={onSelectChat}
+              onRename={onRename}
+              onDelete={onDelete}
+            />
+            <SidebarGroup
+              label="Older"
+              conversations={filterGroup(groupedConversations.older)}
+              activeId={activeId}
+              onSelect={onSelectChat}
+              onRename={onRename}
+              onDelete={onDelete}
+            />
+          </>
+        )}
       </div>
 
       {/* Tools section */}
@@ -232,13 +293,23 @@ const SidebarContent = ({
           Security Tools
         </p>
         <div className="space-y-0.5">
-          {TOOLS.map(({ icon: Icon, label, route }) => (
+          {ROUTE_TOOLS.map(({ icon: Icon, label, route }) => (
             <button
               key={label}
               onClick={() => {
-                setSidebarClosed?.();
+                onClose?.();
                 navigate(route);
               }}
+              className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-gray-600 transition-colors hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800/60"
+            >
+              <Icon className="h-4 w-4 text-accent" />
+              {label}
+            </button>
+          ))}
+          {PROMPT_TOOLS.map(({ icon: Icon, label, prompt }) => (
+            <button
+              key={label}
+              onClick={() => handlePromptTool(prompt)}
               className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-gray-600 transition-colors hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800/60"
             >
               <Icon className="h-4 w-4 text-accent" />

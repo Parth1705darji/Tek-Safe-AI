@@ -48,11 +48,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     conversationId?: string;
     message?: string;
     userId?: string;
+    activeTools?: string[];
   } | null;
 
   const conversationId = body?.conversationId;
   const message = body?.message;
   const userId = body?.userId;
+  const activeTools: string[] = body?.activeTools ?? [];
 
   if (!conversationId || !message?.trim() || !userId) {
     return res.status(400).json({ error: 'Missing required fields', body: JSON.stringify(body) });
@@ -206,6 +208,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     // 7. Build RAG prompt
     const ragMessages = buildRAGPrompt(kbChunks, history ?? [], message.trim());
+
+    // 7b. Inject active tool context into the system message
+    const TOOL_CONTEXT: Record<string, string> = {
+      threat_intel:
+        'USER HAS THREAT INTEL MODE ENABLED: Provide detailed threat intelligence. Include CVE numbers, MITRE ATT&CK technique IDs, CVSS scores, and known IOCs where relevant.',
+      certin_mode:
+        'USER HAS CERT-In MODE ENABLED: Emphasize CERT-In compliance. Reference the 6-hour mandatory incident reporting window, CERT-In Information Security Practices, and relevant CERT-In advisories.',
+      report_builder:
+        'USER HAS REPORT BUILDER ENABLED: Structure your response as a formal security report with sections: Executive Summary, Technical Findings, Risk Level, and Recommendations.',
+    };
+    const extraContext = activeTools
+      .map((t) => TOOL_CONTEXT[t])
+      .filter(Boolean)
+      .join('\n\n');
+    if (extraContext && ragMessages[0]?.role === 'system') {
+      ragMessages[0] = { ...ragMessages[0], content: ragMessages[0].content + '\n\n' + extraContext };
+    }
 
     // 8. Call DeepSeek with streaming
     const streamRes = await createStreamingCompletion(

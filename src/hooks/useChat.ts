@@ -21,7 +21,7 @@ const TOOL_ENDPOINT: Record<string, string> = {
 
 // ─── Hook ─────────────────────────────────────────────────────────────────────
 
-export function useChat(conversationId?: string, clerkUserId?: string) {
+export function useChat(conversationId?: string, clerkUserId?: string, activeTools?: string[]) {
   const supabase = useSupabase();
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -127,6 +127,7 @@ export function useChat(conversationId?: string, clerkUserId?: string) {
             conversationId: convId,
             message: content.trim(),
             userId: clerkUserId,
+            activeTools: activeTools ?? [],
           }),
           signal: ctrl.signal,
         });

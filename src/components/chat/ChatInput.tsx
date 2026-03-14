@@ -10,7 +10,17 @@ interface ChatInputProps {
   messageCount?: number;
   messageLimit?: number;
   placeholder?: string;
+  activeTools?: string[];
+  onToolToggle?: (tool: string) => void;
 }
+
+const TOOL_CHIPS = [
+  { id: 'threat_intel', label: '⚠️ Threat Intel' },
+  { id: 'certin_mode', label: '🛡 CERT-In Mode' },
+  { id: 'report_builder', label: '📊 Report Builder' },
+  { id: 'web_search', label: '🌐 Web Search' },
+  { id: 'file_analysis', label: '📁 File Analysis' },
+];
 
 const ChatInput = ({
   onSend,
@@ -20,6 +30,8 @@ const ChatInput = ({
   messageCount,
   messageLimit,
   placeholder = 'Ask Tek-Safe AI anything...',
+  activeTools = [],
+  onToolToggle,
 }: ChatInputProps) => {
   const [value, setValue] = useState('');
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -46,6 +58,9 @@ const ChatInput = ({
       e.preventDefault();
       handleSend();
     }
+    if (e.key === 'Escape') {
+      setValue('');
+    }
   };
 
   const showRateLimit = messageCount !== undefined && messageLimit !== undefined && messageLimit !== Infinity;
@@ -55,6 +70,27 @@ const ChatInput = ({
   return (
     <div className="border-t border-gray-200 bg-white px-4 pb-4 pt-3 dark:border-gray-800 dark:bg-dark-bg">
       <div className="mx-auto max-w-2xl">
+        {/* Tool chips row */}
+        <div className="mb-2 flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
+          {TOOL_CHIPS.map((chip) => {
+            const isActive = activeTools.includes(chip.id);
+            return (
+              <button
+                key={chip.id}
+                onClick={() => onToolToggle?.(chip.id)}
+                className={cn(
+                  'flex shrink-0 items-center rounded-full border px-3 py-1 text-xs font-medium transition-all duration-150',
+                  isActive
+                    ? 'border-accent/50 bg-accent/10 text-accent dark:border-accent/40 dark:bg-accent/10'
+                    : 'border-gray-200 bg-gray-50 text-gray-500 hover:border-gray-300 hover:text-gray-700 dark:border-gray-700 dark:bg-gray-800/60 dark:text-gray-400 dark:hover:border-gray-600'
+                )}
+              >
+                {chip.label}
+              </button>
+            );
+          })}
+        </div>
+
         {/* Input row */}
         <div
           className={cn(
@@ -105,7 +141,7 @@ const ChatInput = ({
         {/* Footer hint */}
         <div className="mt-2 flex items-center justify-between px-1">
           <p className="text-xs text-gray-400 dark:text-gray-500">
-            {isStreaming ? 'Generating...' : 'Shift+Enter for new line'}
+            {isStreaming ? 'Generating...' : 'Shift+Enter for new line · Esc to clear'}
           </p>
 
           {showRateLimit && (
