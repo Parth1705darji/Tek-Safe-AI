@@ -307,10 +307,7 @@ export function useChat(conversationId?: string, clerkUserId?: string, activeToo
 
   const submitFeedback = useCallback(
     async (messageId: string, feedback: 'up' | 'down', feedbackText?: string) => {
-      await supabase
-        .from('messages')
-        .update({ feedback, feedback_text: feedbackText ?? null })
-        .eq('id', messageId);
+      // Optimistic update first
       setMessages((prev) =>
         prev.map((m) =>
           m.id === messageId
@@ -318,8 +315,18 @@ export function useChat(conversationId?: string, clerkUserId?: string, activeToo
             : m
         )
       );
+      // Persist via API endpoint (which also logs analytics)
+      try {
+        await fetch('/api/feedback', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ messageId, feedback, feedbackText, userId: clerkUserId }),
+        });
+      } catch (e) {
+        console.warn('Feedback save failed (non-fatal):', (e as Error).message);
+      }
     },
-    [supabase]
+    [clerkUserId]
   );
 
   return { messages, isLoading, isStreaming, sendMessage, submitFeedback, stopGenerating };

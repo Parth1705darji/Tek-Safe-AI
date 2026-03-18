@@ -2,7 +2,8 @@ import { supabase } from './supabase';
 
 // Daily message limits per tier
 export const DAILY_LIMITS: Record<string, number> = {
-  free: 50,
+  free: 20,
+  pro: 500,
   premium: Infinity,
 };
 

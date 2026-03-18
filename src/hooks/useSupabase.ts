@@ -1,4 +1,4 @@
-import { useSession } from '@clerk/clerk-react';
+import { useSession } from '@clerk/react';
 import { useMemo } from 'react';
 import { createAuthenticatedClient } from '../lib/supabase';
 import type { SupabaseClient } from '@supabase/supabase-js';

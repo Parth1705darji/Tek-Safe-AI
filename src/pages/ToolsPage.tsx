@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate, Navigate } from 'react-router-dom';
-import { useUser } from '@clerk/clerk-react';
+import { useUser } from '@clerk/react';
 import Header from '../components/layout/Header';
 import Sidebar from '../components/layout/Sidebar';
 import BreachCheck from '../components/tools/BreachCheck';

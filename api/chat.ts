@@ -112,7 +112,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     // 2. Check rate limit
-    const LIMITS: Record<string, number> = { free: 50, premium: Infinity };
+    const LIMITS: Record<string, number> = { free: 20, pro: 500, premium: Infinity };
     const limit = LIMITS[user.tier] ?? 50;
     const now = new Date();
     const resetAt = user.daily_message_reset_at ? new Date(user.daily_message_reset_at) : null;
@@ -183,6 +183,53 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       })().catch((e) => console.warn('Title generation failed (non-fatal):', (e as Error).message));
     }
 
+    // 5c. Pre-flight tool detection — run security scan BEFORE AI responds so AI has real data
+    const PREFLIGHT_PATTERNS: Record<string, RegExp> = {
+      url_scan: /https?:\/\/[^\s]{8,}/i,
+      breach_check: /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/,
+      ip_check: /\b(?:\d{1,3}\.){3}\d{1,3}\b/,
+    };
+    const BODY_KEY_MAP: Record<string, string> = {
+      url_scan: 'url',
+      breach_check: 'email',
+      ip_check: 'ip',
+    };
+
+    let preflightToolResult: Record<string, unknown> | null = null;
+    let preflightToolType: string | null = null;
+    let preflightParams: string | null = null;
+
+    for (const [toolType, pattern] of Object.entries(PREFLIGHT_PATTERNS)) {
+      const match = message.trim().match(pattern);
+      if (match) {
+        preflightParams = match[0];
+        preflightToolType = toolType;
+        try {
+          const baseUrl = process.env.VERCEL_URL
+            ? `https://${process.env.VERCEL_URL}`
+            : 'http://localhost:3000';
+          const slug = toolType.replace('_', '-');
+          const toolRes = await fetch(`${baseUrl}/api/tools/${slug}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ [BODY_KEY_MAP[toolType]]: preflightParams }),
+          });
+          if (toolRes.ok) {
+            preflightToolResult = (await toolRes.json()) as Record<string, unknown>;
+          }
+        } catch (e) {
+          console.warn('Pre-flight tool scan failed (non-fatal):', (e as Error).message);
+        }
+        break;
+      }
+    }
+
+    // Send pre-flight result immediately so UI can render ToolCard without waiting for stream end
+    if (preflightToolResult && preflightToolType) {
+      send({ type: 'tool', tool: preflightToolType as 'breach_check' | 'url_scan' | 'ip_check', params: preflightParams! });
+      send({ type: 'tool_result', result: preflightToolResult } as never);
+    }
+
     // 6. Embed query + vector search KB (non-fatal if fails)
     let kbChunks: KBChunk[] = [];
     try {
@@ -224,6 +271,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       .join('\n\n');
     if (extraContext && ragMessages[0]?.role === 'system') {
       ragMessages[0] = { ...ragMessages[0], content: ragMessages[0].content + '\n\n' + extraContext };
+    }
+
+    // 7c. Inject pre-flight scan result so AI bases its advice on real scan data
+    if (preflightToolResult && preflightToolType && ragMessages[0]?.role === 'system') {
+      const toolResultContext = `\n\n## Real-Time Security Scan Result\nI already ran a ${preflightToolType.replace('_', ' ')} scan on "${preflightParams}" before responding. Here is the actual scan data — base your advice on this:\n\n${JSON.stringify(preflightToolResult, null, 2)}\n\nUse this real data in your response. Do NOT trigger another tool scan for this item since it is already done.`;
+      ragMessages[0] = { ...ragMessages[0], content: ragMessages[0].content + toolResultContext };
     }
 
     // 8. Call DeepSeek with streaming
@@ -296,6 +349,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       .select('id')
       .single();
 
+    // 10b. Log tool usage analytics
+    if (tools.length > 0) {
+      try {
+        await supabaseAdmin.from('analytics_events').insert({
+          user_id: user.id,
+          event_type: 'tool_used',
+          event_data: {
+            tool_type: tools[0].type,
+            params_length: tools[0].params.length,
+            conversation_id: conversationId,
+          },
+        });
+      } catch (e) {
+        console.warn('Tool analytics failed (non-fatal):', (e as Error).message);
+      }
+    }
+
     // 11. Emit tool trigger event if detected (UI renders ToolCard in loading state)
     if (tools.length > 0) {
       send({ type: 'tool', tool: tools[0].type, params: tools[0].params });
@@ -313,6 +383,24 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         daily_message_reset_at: isPastReset ? getTomorrowMidnight() : user.daily_message_reset_at,
       })
       .eq('id', user.id);
+
+    // 13b. Log analytics event for message sent
+    try {
+      await supabaseAdmin.from('analytics_events').insert({
+        user_id: user.id,
+        event_type: 'message_sent',
+        event_data: {
+          conversation_id: conversationId,
+          message_length: message.trim().length,
+          tools_active: activeTools,
+          kb_chunks_found: kbChunks.length,
+          tool_triggered: tools.length > 0 ? tools[0].type : null,
+          had_kb_context: kbChunks.length > 0,
+        },
+      });
+    } catch (analyticsError) {
+      console.warn('Analytics failed (non-fatal):', (analyticsError as Error).message);
+    }
 
     send({ type: 'done', messageId: savedMsg?.id ?? null });
     res.end();

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useUser } from '@clerk/clerk-react';
+import { useUser } from '@clerk/react';
 import { useSupabase } from '../../hooks/useSupabase';
 import type { User } from '../../types';
 

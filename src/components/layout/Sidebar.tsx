@@ -1,5 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useUser } from '@clerk/react';
+import { ADMIN_EMAIL } from '../../lib/adminService';
 import {
   Plus,
   MessageSquare,
@@ -193,6 +195,8 @@ const SidebarContent = ({
   onClose,
 }: Omit<SidebarProps, 'isOpen'>) => {
   const navigate = useNavigate();
+  const { user } = useUser();
+  const isAdmin = !!ADMIN_EMAIL && user?.primaryEmailAddress?.emailAddress === ADMIN_EMAIL;
   const [search, setSearch] = useState('');
 
   function filterGroup(convs: Conversation[]) {
@@ -318,6 +322,19 @@ const SidebarContent = ({
           ))}
         </div>
       </div>
+
+      {/* Admin link — only visible to admin email */}
+      {isAdmin && (
+        <div className="border-t border-gray-200 p-3 dark:border-gray-700">
+          <button
+            onClick={() => { onClose?.(); navigate('/admin'); }}
+            className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-gray-600 transition-colors hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800/60"
+          >
+            <Shield className="h-4 w-4 text-accent" />
+            Admin Portal
+          </button>
+        </div>
+      )}
     </div>
   );
 };

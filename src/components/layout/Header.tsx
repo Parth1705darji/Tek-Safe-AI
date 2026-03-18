@@ -1,4 +1,4 @@
-import { useAuth, UserButton, SignInButton, SignUpButton } from '@clerk/clerk-react';
+import { useAuth, UserButton, SignInButton, SignUpButton } from '@clerk/react';
 import { Link } from 'react-router-dom';
 import { Shield, Menu } from 'lucide-react';
 import ThemeToggle from '../common/ThemeToggle';
@@ -56,7 +56,7 @@ const Header = ({ onMenuClick, conversationTitle }: HeaderProps) => {
           {!isLoaded ? (
             <div className="h-8 w-20 animate-pulse rounded-md bg-gray-200 dark:bg-gray-700" />
           ) : isSignedIn ? (
-            <UserButton afterSignOutUrl="/" />
+            <UserButton />
           ) : (
             <>
               <SignInButton mode="modal">

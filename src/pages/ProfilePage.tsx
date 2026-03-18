@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useUser, UserProfile } from '@clerk/clerk-react';
+import { useUser, UserProfile } from '@clerk/react';
 import { supabase } from '../lib/supabase';
 import { DAILY_LIMITS } from '../lib/utils';
 import type { User } from '../types';

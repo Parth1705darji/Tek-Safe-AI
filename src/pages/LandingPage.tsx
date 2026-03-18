@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useAuth, SignInButton, SignUpButton } from '@clerk/clerk-react';
+import { useAuth, SignInButton, SignUpButton } from '@clerk/react';
 import { useNavigate } from 'react-router-dom';
 import {
   Shield,

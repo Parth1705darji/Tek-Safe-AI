@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
-import { useUser } from '@clerk/clerk-react';
+import { useUser } from '@clerk/react';
 import Header from '../components/layout/Header';
 import Sidebar from '../components/layout/Sidebar';
 import ChatArea from '../components/chat/ChatArea';
@@ -137,7 +137,7 @@ const ChatPage = () => {
         ...groupedConversations.yesterday,
         ...groupedConversations.lastWeek,
         ...groupedConversations.older,
-      ].find((c) => c.id === conversationId)?.title
+      ].find((c) => c.id === conversationId)?.title ?? undefined
     : undefined;
 
   const handleDeleteConversation = useCallback(

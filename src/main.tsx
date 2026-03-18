@@ -1,6 +1,6 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
-import { ClerkProvider } from '@clerk/clerk-react';
+import { ClerkProvider } from '@clerk/react';
 import './styles/globals.css';
 import './styles/tokens.css';
 import App from './App';
@@ -15,6 +15,7 @@ createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <ClerkProvider
       publishableKey={clerkPubKey}
+      afterSignOutUrl="/"
       appearance={{
         variables: {
           colorPrimary: '#1E3A5F',
