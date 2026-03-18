@@ -1,5 +1,6 @@
 import { lazy, Suspense } from 'react';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { Analytics } from '@vercel/analytics/react';
 import ErrorBoundary from './components/common/ErrorBoundary';
 import OfflineBanner from './components/common/OfflineBanner';
 import { ToastContainer } from './components/common/Toast';
@@ -96,6 +97,7 @@ function App() {
         </Suspense>
         <ChatwootWidget />
         <ToastContainer />
+        <Analytics />
       </BrowserRouter>
     </ErrorBoundary>
   );
