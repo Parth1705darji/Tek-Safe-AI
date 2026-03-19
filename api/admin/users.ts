@@ -18,7 +18,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     process.env.SUPABASE_SERVICE_ROLE_KEY!
   );
 
-  const page = parseInt((req.query.page as string) ?? '1');
+  const rawPage = parseInt((req.query.page as string) ?? '1');
+  const page = isNaN(rawPage) || rawPage < 1 ? 1 : rawPage;
   const limit = 20;
   const offset = (page - 1) * limit;
   const search = (req.query.search as string) ?? '';

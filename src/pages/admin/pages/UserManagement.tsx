@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, Fragment } from 'react';
 import { useUser } from '@clerk/react';
 import { Search, ChevronLeft, ChevronRight } from 'lucide-react';
 import { showToast } from '../../../components/common/Toast';
@@ -132,8 +132,8 @@ const UserManagement = () => {
                 </tr>
               ) : (
                 data.users.map(u => (
-                  <>
-                    <tr key={u.id} className="border-b border-gray-800/50 hover:bg-gray-800/30">
+                  <Fragment key={u.id}>
+                    <tr className="border-b border-gray-800/50 hover:bg-gray-800/30">
                       <td className="px-5 py-3">
                         <div className="flex items-center gap-3">
                           {u.avatar_url ? (
@@ -185,7 +185,7 @@ const UserManagement = () => {
                       </td>
                     </tr>
                     {roleConfirm?.userId === u.clerk_id && (
-                      <tr key={`${u.id}-confirm`} className="border-b border-gray-800/50 bg-gray-800/20">
+                      <tr className="border-b border-gray-800/50 bg-gray-800/20">
                         <td colSpan={6} className="px-5 py-2">
                           <ConfirmModal
                             message={`Change ${roleConfirm.name}'s role to ${roleConfirm.newRole}? They must re-login to see changes.`}
@@ -197,7 +197,7 @@ const UserManagement = () => {
                         </td>
                       </tr>
                     )}
-                  </>
+                  </Fragment>
                 ))
               )}
             </tbody>

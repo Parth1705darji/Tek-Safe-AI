@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, Fragment } from 'react';
 import { useUser } from '@clerk/react';
 import { Plus, Edit2, Trash2, Search, X, Tag } from 'lucide-react';
 import { showToast } from '../../../components/common/Toast';
@@ -41,7 +41,7 @@ const KBManager = () => {
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
 
-  const fetchArticles = async () => {
+  const fetchArticles = useCallback(async () => {
     setLoading(true);
     try {
       const res = await fetch('/api/admin/stats', {
@@ -54,12 +54,11 @@ const KBManager = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [adminEmail]);
 
   useEffect(() => {
     if (adminEmail) fetchArticles();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [adminEmail]);
+  }, [adminEmail, fetchArticles]);
 
   const filtered = articles.filter(a => {
     const matchesSearch = !search ||
@@ -320,8 +319,8 @@ const KBManager = () => {
                 </tr>
               ) : (
                 filtered.map(article => (
-                  <>
-                    <tr key={article.id} className="border-b border-gray-800/50 hover:bg-gray-800/30">
+                  <Fragment key={article.id}>
+                    <tr className="border-b border-gray-800/50 hover:bg-gray-800/30">
                       <td className="px-5 py-3">
                         <p className="max-w-[240px] truncate font-medium text-white">{article.title}</p>
                       </td>
@@ -365,7 +364,7 @@ const KBManager = () => {
                       </td>
                     </tr>
                     {deleteConfirm === article.id && (
-                      <tr key={`${article.id}-confirm`} className="border-b border-gray-800/50 bg-gray-800/20">
+                      <tr className="border-b border-gray-800/50 bg-gray-800/20">
                         <td colSpan={5} className="px-5 py-2">
                           <ConfirmModal
                             message={`Delete "${article.title}"? This cannot be undone.`}
@@ -376,7 +375,7 @@ const KBManager = () => {
                         </td>
                       </tr>
                     )}
-                  </>
+                  </Fragment>
                 ))
               )}
             </tbody>

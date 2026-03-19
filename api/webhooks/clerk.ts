@@ -122,8 +122,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             .from('users')
             .update({ role })
             .eq('clerk_id', id);
-
-          console.log(`User ${primaryEmail} created with role: ${role}`);
         } catch (e) {
           console.warn('Failed to set role metadata (non-fatal):', (e as Error).message);
         }

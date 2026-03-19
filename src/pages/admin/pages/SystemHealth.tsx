@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useUser } from '@clerk/react';
 import { CheckCircle2, XCircle, RefreshCw, Database, Key, Server } from 'lucide-react';
 
@@ -50,7 +50,7 @@ const SystemHealth = () => {
   const [dbStats, setDbStats] = useState<DBStats | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     setLoading(true);
     try {
       const [pingRes, dbRes] = await Promise.all([
@@ -70,12 +70,11 @@ const SystemHealth = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [adminEmail]);
 
   useEffect(() => {
     if (adminEmail) fetchData();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [adminEmail]);
+  }, [adminEmail, fetchData]);
 
   const allOk = env
     ? env.hasSupabaseUrl && env.hasServiceRole && env.hasDeepSeek && env.hasAdminEmail
