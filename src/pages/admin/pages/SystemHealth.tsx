@@ -55,7 +55,7 @@ const SystemHealth = () => {
     try {
       const [pingRes, dbRes] = await Promise.all([
         fetch('/api/ping'),
-        fetch('/api/admin/db-stats', {
+        fetch('/api/admin/stats?include=db', {
           headers: { 'x-admin-email': adminEmail },
         }),
       ]);

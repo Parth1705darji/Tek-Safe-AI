@@ -22,6 +22,29 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
   const startOfWeek = new Date(now.getTime() - 7 * 86400000).toISOString();
 
+  // ?include=db returns database table row counts (merged from db-stats endpoint)
+  if (req.query.include === 'db') {
+    const [users, conversations, messages, kbDocs, kbEmbeddings, analytics] =
+      await Promise.all([
+        supabase.from('users').select('id', { count: 'exact', head: true }),
+        supabase.from('conversations').select('id', { count: 'exact', head: true }),
+        supabase.from('messages').select('id', { count: 'exact', head: true }),
+        supabase.from('kb_documents').select('id', { count: 'exact', head: true }),
+        supabase.from('kb_embeddings').select('id', { count: 'exact', head: true }),
+        supabase.from('analytics_events').select('id', { count: 'exact', head: true }),
+      ]);
+    return res.status(200).json({
+      tables: {
+        users: users.count ?? 0,
+        conversations: conversations.count ?? 0,
+        messages: messages.count ?? 0,
+        kb_documents: kbDocs.count ?? 0,
+        kb_embeddings: kbEmbeddings.count ?? 0,
+        analytics_events: analytics.count ?? 0,
+      },
+    });
+  }
+
   const [
     totalUsers,
     usersToday,
