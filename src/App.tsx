@@ -1,12 +1,14 @@
 import { lazy, Suspense } from 'react';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { Analytics } from '@vercel/analytics/react';
+import { SpeedInsights } from '@vercel/speed-insights/react';
 import ErrorBoundary from './components/common/ErrorBoundary';
 import OfflineBanner from './components/common/OfflineBanner';
 import { ToastContainer } from './components/common/Toast';
 import ChatwootWidget from './components/common/ChatwootWidget';
 import ProtectedRoute from './components/auth/ProtectedRoute';
 import AuthWrapper from './components/auth/AuthWrapper';
+import AdminRoute from './components/auth/AdminRoute';
 import { Shield } from 'lucide-react';
 
 // Lazy-load all pages for code-splitting
@@ -14,7 +16,7 @@ const LandingPage = lazy(() => import('./pages/LandingPage'));
 const ChatPage = lazy(() => import('./pages/ChatPage'));
 const ProfilePage = lazy(() => import('./pages/ProfilePage'));
 const ToolsPage = lazy(() => import('./pages/ToolsPage'));
-const AdminPage = lazy(() => import('./pages/AdminPage'));
+const AdminPortal = lazy(() => import('./pages/admin/AdminPortal'));
 
 // Full-screen loader shown during lazy page loads
 function PageLoader() {
@@ -86,11 +88,17 @@ function App() {
             <Route
               path="/admin"
               element={
-                <ProtectedRoute>
-                  <AuthWrapper>
-                    <AdminPage />
-                  </AuthWrapper>
-                </ProtectedRoute>
+                <AdminRoute>
+                  <AdminPortal />
+                </AdminRoute>
+              }
+            />
+            <Route
+              path="/admin/*"
+              element={
+                <AdminRoute>
+                  <AdminPortal />
+                </AdminRoute>
               }
             />
           </Routes>
@@ -98,6 +106,7 @@ function App() {
         <ChatwootWidget />
         <ToastContainer />
         <Analytics />
+        <SpeedInsights />
       </BrowserRouter>
     </ErrorBoundary>
   );

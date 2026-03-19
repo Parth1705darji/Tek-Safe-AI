@@ -102,6 +102,31 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           event_type: 'sign_up',
           event_data: { clerk_id: id },
         });
+
+        // Set default role in Clerk publicMetadata
+        try {
+          const { createClerkClient } = await import('@clerk/backend');
+          const clerkBackend = createClerkClient({
+            secretKey: process.env.CLERK_SECRET_KEY!,
+          });
+
+          const isAdminEmail = primaryEmail === process.env.VITE_ADMIN_EMAIL;
+          const role = isAdminEmail ? 'admin' : 'user';
+
+          await clerkBackend.users.updateUserMetadata(id, {
+            publicMetadata: { role },
+          });
+
+          // Also set role in Supabase
+          await supabaseAdmin
+            .from('users')
+            .update({ role })
+            .eq('clerk_id', id);
+
+          console.log(`User ${primaryEmail} created with role: ${role}`);
+        } catch (e) {
+          console.warn('Failed to set role metadata (non-fatal):', (e as Error).message);
+        }
         break;
       }
 

@@ -9,6 +9,7 @@ export type User = {
   display_name: string | null;
   avatar_url: string | null;
   tier: 'free' | 'premium';
+  role: 'user' | 'admin';
   daily_message_count: number;
   daily_message_reset_at: string | null;
   created_at: string;
@@ -133,6 +134,7 @@ export interface Database {
           display_name?: string | null;
           avatar_url?: string | null;
           tier?: 'free' | 'premium';
+          role?: 'user' | 'admin';
           daily_message_count?: number;
           daily_message_reset_at?: string | null;
           created_at?: string;

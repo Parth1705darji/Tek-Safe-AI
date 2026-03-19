@@ -42,7 +42,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     supabase.from('messages').select('id', { count: 'exact', head: true }).eq('role', 'assistant').gte('created_at', startOfWeek),
     supabase.from('analytics_events').select('event_data').eq('event_type', 'tool_used'),
     supabase.from('messages').select('feedback').eq('role', 'assistant').not('feedback', 'is', null),
-    supabase.from('users').select('id, email, display_name, tier, daily_message_count, created_at').order('created_at', { ascending: false }).limit(20),
+    supabase.from('users').select('id, clerk_id, email, display_name, tier, role, daily_message_count, created_at').order('created_at', { ascending: false }).limit(20),
     supabase.from('kb_documents').select('id, title, category, subcategory, tags, created_at').order('created_at', { ascending: false }),
   ]);
 

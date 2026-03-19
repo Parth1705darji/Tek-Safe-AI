@@ -47,6 +47,9 @@
     "api/tools/ip-check.ts": { "maxDuration": 15 },
     "api/webhooks/clerk.ts": { "maxDuration": 10 },
     "api/admin/stats.ts": { "maxDuration": 15 },
-    "api/admin/kb.ts": { "maxDuration": 60 }
+    "api/admin/kb.ts": { "maxDuration": 60 },
+    "api/admin/users.ts": { "maxDuration": 10 },
+    "api/admin/db-stats.ts": { "maxDuration": 10 },
+    "api/admin/set-role.ts": { "maxDuration": 10 }
   }
 }
