@@ -1,9 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useSupabase } from './useSupabase';
 import type { Message, KBSource } from '../types';
-
 // ─── SSE event shapes sent by api/chat.ts ─────────────────────────────────────
-
 type SSEEvent =
   | { type: 'token'; content: string }
   | { type: 'sources'; sources: KBSource[] }
@@ -12,30 +10,29 @@ type SSEEvent =
   | { type: 'done'; messageId: string | null }
   | { type: 'error'; message: string }
   | { type: 'info'; message: string };
-
 const TOOL_ENDPOINT: Record<string, string> = {
   breach_check: 'breach-check',
   url_scan: 'url-scan',
   ip_check: 'ip-check',
 };
-
 // ─── Hook ─────────────────────────────────────────────────────────────────────
-
 export function useChat(conversationId?: string, clerkUserId?: string, activeTools?: string[]) {
   const supabase = useSupabase();
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isStreaming, setIsStreaming] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
-
   // Load persisted messages when conversation changes.
-  // Guard: if optimistic messages are already in state (mid-send race),
-  // keep them rather than overwriting with an empty DB result.
+  // Always clear immediately on conversationId change to prevent cross-chat
+  // message contamination. Optimistic messages for a new chat are managed
+  // by ChatPage which defers sendMessage until after navigation settles.
   useEffect(() => {
     if (!conversationId) {
       setMessages([]);
       return;
     }
+    // Clear immediately so the previous chat's messages never bleed into the new one
+    setMessages([]);
     let cancelled = false;
     const load = async () => {
       const result = (await supabase
@@ -47,24 +44,17 @@ export function useChat(conversationId?: string, clerkUserId?: string, activeToo
         error: unknown;
       };
       if (!cancelled && result.data) {
-        setMessages((current) => {
-          // Merge DB messages with any in-flight optimistic messages
-          // (local UUIDs not yet persisted) so they are never wiped.
-          const dbIds = new Set(result.data!.map((m) => m.id));
-          const inFlight = current.filter((m) => !dbIds.has(m.id));
-          if (inFlight.length > 0) return [...result.data!, ...inFlight];
-          return result.data!;
-        });
+        setMessages(result.data);
       }
     };
     load();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [conversationId, supabase]);
-
   const sendMessage = useCallback(
     async (content: string, convId: string) => {
       if (!content.trim() || isStreaming || !clerkUserId) return;
-
       // Optimistic user message — displayed immediately
       const optimisticUserMsg: Message = {
         id: crypto.randomUUID(),
@@ -80,10 +70,8 @@ export function useChat(conversationId?: string, clerkUserId?: string, activeToo
       };
       setMessages((prev) => [...prev, optimisticUserMsg]);
       setIsLoading(true);
-
       const ctrl = new AbortController();
       abortRef.current = ctrl;
-
       // Placeholder AI message — filled in as tokens stream
       const aiMsgLocalId = crypto.randomUUID();
       const aiMsg: Message = {
@@ -98,13 +86,11 @@ export function useChat(conversationId?: string, clerkUserId?: string, activeToo
         feedback_text: null,
         created_at: new Date().toISOString(),
       };
-
       // Track tool trigger and real DB ID within this send cycle
       let pendingTool: { tool: Message['tool_used']; params: string } | null = null;
       let finalMsgId: string = aiMsgLocalId;
       // Flag: did we add the AI placeholder to state yet?
       let aiMsgAdded = false;
-
       // Layer 1: Client-side PII warning (non-blocking — server also enforces this)
       const CLIENT_PII = [
         /\bpassword\s*(is|[:=])\s*\S+/i,
@@ -118,7 +104,6 @@ export function useChat(conversationId?: string, clerkUserId?: string, activeToo
       const piiWarning = CLIENT_PII.some((re) => re.test(content.trim()))
         ? "⚠️ For your safety, please don't share passwords, OTPs, or Aadhaar numbers. Please rephrase without sensitive data."
         : '';
-
       try {
         const response = await fetch('/api/chat', {
           method: 'POST',
@@ -131,38 +116,29 @@ export function useChat(conversationId?: string, clerkUserId?: string, activeToo
           }),
           signal: ctrl.signal,
         });
-
         if (!response.ok || !response.body) {
           const errorText = await response.text().catch(() => '');
           throw new Error(`API error ${response.status}${errorText ? `: ${errorText.slice(0, 200)}` : ''}`);
         }
-
         // Valid streaming response confirmed — add AI placeholder now.
-        // This prevents the double-bubble (LoadingIndicator + empty placeholder)
-        // that was visible while waiting for the fetch to resolve.
         setMessages((prev) => [...prev, { ...aiMsg, content: piiWarning }]);
         aiMsgAdded = true;
         setIsLoading(false);
         setIsStreaming(true);
-
         const reader = response.body.getReader();
         const decoder = new TextDecoder();
         let sseBuffer = '';
-
         while (true) {
           const { done, value } = await reader.read();
           if (done) break;
-
           sseBuffer += decoder.decode(value, { stream: true });
           const lines = sseBuffer.split('\n');
           sseBuffer = lines.pop() ?? '';
-
           for (const line of lines) {
             if (!line.startsWith('data: ')) continue;
             const raw = line.slice(6).trim();
             try {
               const event = JSON.parse(raw) as SSEEvent;
-
               switch (event.type) {
                 case 'token':
                   setMessages((prev) =>
@@ -173,7 +149,6 @@ export function useChat(conversationId?: string, clerkUserId?: string, activeToo
                     )
                   );
                   break;
-
                 case 'sources':
                   setMessages((prev) =>
                     prev.map((m) =>
@@ -181,7 +156,6 @@ export function useChat(conversationId?: string, clerkUserId?: string, activeToo
                     )
                   );
                   break;
-
                 case 'tool':
                   pendingTool = { tool: event.tool, params: event.params };
                   setMessages((prev) =>
@@ -190,7 +164,6 @@ export function useChat(conversationId?: string, clerkUserId?: string, activeToo
                     )
                   );
                   break;
-
                 case 'title':
                   window.dispatchEvent(
                     new CustomEvent('teksafe:title-update', {
@@ -198,7 +171,6 @@ export function useChat(conversationId?: string, clerkUserId?: string, activeToo
                     })
                   );
                   break;
-
                 case 'done':
                   if (event.messageId) {
                     finalMsgId = event.messageId;
@@ -209,7 +181,6 @@ export function useChat(conversationId?: string, clerkUserId?: string, activeToo
                     );
                   }
                   break;
-
                 case 'error':
                   setMessages((prev) =>
                     prev.map((m) =>
@@ -219,7 +190,6 @@ export function useChat(conversationId?: string, clerkUserId?: string, activeToo
                     )
                   );
                   break;
-
                 case 'info':
                   setMessages((prev) =>
                     prev.map((m) =>
@@ -235,7 +205,6 @@ export function useChat(conversationId?: string, clerkUserId?: string, activeToo
             }
           }
         }
-
         // ── Execute security tool API (non-fatal) ───────────────────────────
         if (pendingTool?.tool) {
           const endpoint = TOOL_ENDPOINT[pendingTool.tool];
@@ -251,11 +220,9 @@ export function useChat(conversationId?: string, clerkUserId?: string, activeToo
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ [bodyKey]: pendingTool.params }),
             });
-
             if (toolRes.ok) {
               const toolResult = await toolRes.json() as Record<string, unknown>;
               const capturedId = finalMsgId;
-
               setMessages((prev) =>
                 prev.map((m) =>
                   m.id === capturedId || m.id === aiMsgLocalId
@@ -263,7 +230,6 @@ export function useChat(conversationId?: string, clerkUserId?: string, activeToo
                     : m
                 )
               );
-
               // Persist tool_result to DB
               await supabase
                 .from('messages')
@@ -298,13 +264,11 @@ export function useChat(conversationId?: string, clerkUserId?: string, activeToo
     },
     [isStreaming, clerkUserId, supabase]
   );
-
   const stopGenerating = useCallback(() => {
     abortRef.current?.abort();
     setIsStreaming(false);
     setIsLoading(false);
   }, []);
-
   const submitFeedback = useCallback(
     async (messageId: string, feedback: 'up' | 'down', feedbackText?: string) => {
       // Optimistic update first
@@ -328,6 +292,5 @@ export function useChat(conversationId?: string, clerkUserId?: string, activeToo
     },
     [clerkUserId]
   );
-
   return { messages, isLoading, isStreaming, sendMessage, submitFeedback, stopGenerating };
 }

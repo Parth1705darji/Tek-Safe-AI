@@ -11,21 +11,22 @@ import { useConversations } from '../hooks/useConversations';
 import { useSupabase } from '../hooks/useSupabase';
 import { DAILY_LIMITS } from '../lib/utils';
 import type { User } from '../types';
-
 const ChatPage = () => {
   const { conversationId } = useParams<{ conversationId?: string }>();
   const navigate = useNavigate();
   const location = useLocation();
   const { user: clerkUser, isLoaded } = useUser();
   const supabase = useSupabase();
-
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [dbUser, setDbUser] = useState<User | null>(null);
   const [activeTools, setActiveTools] = useState<string[]>([]);
   const [dbUserLoading, setDbUserLoading] = useState(true);
   const [dbUserError, setDbUserError] = useState(false);
-
-  // Fetch Supabase user record — called on mount and after each message
+  // Holds a message queued for a brand-new conversation.
+  // We create the conversation, navigate to its URL, then fire the message
+  // only after conversationId has updated in the component — avoiding the
+  // race condition where sendMessage runs while conversationId is still undefined.
+  const pendingMessageRef = useRef<{ content: string; convId: string } | null>(null);
   const refetchUser = useCallback(async () => {
     if (!clerkUser) return;
     const result = (await supabase
@@ -40,13 +41,11 @@ const ChatPage = () => {
       setDbUserError(true);
     }
   }, [clerkUser, supabase]);
-
   useEffect(() => {
     if (!isLoaded || !clerkUser) return;
     setDbUserLoading(true);
     refetchUser().finally(() => setDbUserLoading(false));
   }, [isLoaded, clerkUser, refetchUser]);
-
   const {
     groupedConversations,
     createConversation,
@@ -54,11 +53,25 @@ const ChatPage = () => {
     deleteConversation,
     refetch: refetchConversations,
   } = useConversations(dbUser?.id);
-
   const { messages, isLoading, isStreaming, sendMessage, submitFeedback, stopGenerating } =
     useChat(conversationId, clerkUser?.id, activeTools);
-
-  // Listen for title-update events dispatched by useChat when server generates a title
+  // After navigating to a new conversation URL, fire any queued message.
+  // This runs once conversationId has settled to the new value, guaranteeing
+  // that useChat's message-load effect has already cleared state for the
+  // new conversation before we add our first optimistic message.
+  useEffect(() => {
+    if (
+      pendingMessageRef.current &&
+      conversationId === pendingMessageRef.current.convId
+    ) {
+      const { content, convId } = pendingMessageRef.current;
+      pendingMessageRef.current = null;
+      setTimeout(() => {
+        sendMessage(content, convId);
+      }, 0);
+    }
+  }, [conversationId, sendMessage]);
+  // Listen for title-update events dispatched by useChat
   useEffect(() => {
     const handler = (e: Event) => {
       const { conversationId: convId, title } = (e as CustomEvent).detail as {
@@ -70,10 +83,7 @@ const ChatPage = () => {
     window.addEventListener('teksafe:title-update', handler);
     return () => window.removeEventListener('teksafe:title-update', handler);
   }, [renameConversation]);
-
-  // Track if we auto-fired a tool prompt so we only do it once
   const toolPromptFired = useRef(false);
-
   useEffect(() => {
     const state = location.state as { toolPrompt?: string } | null;
     if (state?.toolPrompt && !conversationId && !toolPromptFired.current) {
@@ -83,16 +93,13 @@ const ChatPage = () => {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [location.state, conversationId]);
-
   useEffect(() => {
     toolPromptFired.current = false;
   }, [conversationId]);
-
   const handleNewChat = useCallback(() => {
     setSidebarOpen(false);
     navigate('/chat');
   }, [navigate]);
-
   const handleSelectChat = useCallback(
     (id: string) => {
       setSidebarOpen(false);
@@ -100,37 +107,33 @@ const ChatPage = () => {
     },
     [navigate]
   );
-
   const handleSendMessage = useCallback(
     async (content: string) => {
       if (!dbUser) return;
-
-      let convId = conversationId;
-
-      if (!convId) {
-        const newConv = await createConversation(dbUser.id);
-        if (!newConv) return;
-        convId = newConv.id;
-        navigate(`/chat/${convId}`, { replace: true });
+      // Existing conversation: send immediately
+      if (conversationId) {
+        await sendMessage(content, conversationId);
+        refetchConversations();
+        await refetchUser();
+        return;
       }
-
-      await sendMessage(content, convId);
-
-      // Refresh sidebar title/sort order and accurate message count.
-      // refetchUser is awaited so the counter updates with the true DB value immediately.
+      // New conversation: create first, then queue the message.
+      // We must NOT call sendMessage before navigate() has updated
+      // conversationId, otherwise useChat's load effect (which clears
+      // messages on conversationId change) would wipe our optimistic messages.
+      const newConv = await createConversation(dbUser.id);
+      if (!newConv) return;
+      pendingMessageRef.current = { content, convId: newConv.id };
+      navigate(`/chat/${newConv.id}`, { replace: true });
       refetchConversations();
-      await refetchUser();
     },
     [conversationId, dbUser, createConversation, navigate, sendMessage, refetchConversations, refetchUser]
   );
-
   const handleToolToggle = useCallback((tool: string) => {
     setActiveTools((prev) =>
       prev.includes(tool) ? prev.filter((t) => t !== tool) : [...prev, tool]
     );
   }, []);
-
-  // Compute active conversation title for header
   const activeConversationTitle = conversationId
     ? [
         ...groupedConversations.today,
@@ -139,7 +142,6 @@ const ChatPage = () => {
         ...groupedConversations.older,
       ].find((c) => c.id === conversationId)?.title ?? undefined
     : undefined;
-
   const handleDeleteConversation = useCallback(
     async (id: string) => {
       await deleteConversation(id);
@@ -147,17 +149,14 @@ const ChatPage = () => {
     },
     [conversationId, deleteConversation, navigate]
   );
-
   const messageLimit = dbUser ? (DAILY_LIMITS[dbUser.tier] ?? 50) : undefined;
   const messageCount = dbUser?.daily_message_count;
-
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-light-bg dark:bg-dark-bg">
       <Header
         onMenuClick={() => setSidebarOpen(true)}
         conversationTitle={activeConversationTitle}
       />
-
       <div className="flex flex-1 overflow-hidden">
         <Sidebar
           groupedConversations={groupedConversations}
@@ -169,7 +168,6 @@ const ChatPage = () => {
           isOpen={sidebarOpen}
           onClose={() => setSidebarOpen(false)}
         />
-
         <main className="flex flex-1 flex-col overflow-hidden">
           {messages.length === 0 && !isLoading ? (
             <WelcomeScreen onPromptClick={handleSendMessage} />
@@ -181,13 +179,11 @@ const ChatPage = () => {
               onFeedback={submitFeedback}
             />
           )}
-
           {dbUserError && (
             <div className="mx-auto mb-2 max-w-2xl rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-800 dark:bg-red-900/20 dark:text-red-400">
               Unable to load your account. Please refresh the page or sign out and sign back in.
             </div>
           )}
-
           <ChatInput
             onSend={handleSendMessage}
             onStop={stopGenerating}
@@ -203,5 +199,4 @@ const ChatPage = () => {
     </div>
   );
 };
-
 export default ChatPage;
