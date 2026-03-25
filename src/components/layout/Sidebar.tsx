@@ -13,6 +13,7 @@ import {
   Pencil,
   Trash2,
   X,
+  ChevronUp,
 } from 'lucide-react';
 import { cn, truncate } from '../../lib/utils';
 import type { GroupedConversations } from '../../hooks/useConversations';
@@ -194,6 +195,7 @@ const SidebarContent = ({
 }: Omit<SidebarProps, 'isOpen'>) => {
   const navigate = useNavigate();
   const [search, setSearch] = useState('');
+  const [toolsOpen, setToolsOpen] = useState(false);
 
   function filterGroup(convs: Conversation[]) {
     if (!search.trim()) return convs;
@@ -287,35 +289,54 @@ const SidebarContent = ({
         )}
       </div>
 
-      {/* Tools section */}
-      <div className="border-t border-gray-200 p-3 dark:border-gray-700">
-        <p className="mb-2 px-1 text-xs font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500">
-          Security Tools
-        </p>
-        <div className="space-y-0.5">
-          {ROUTE_TOOLS.map(({ icon: Icon, label, route }) => (
-            <button
-              key={label}
-              onClick={() => {
-                onClose?.();
-                navigate(route);
-              }}
-              className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-gray-600 transition-colors hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800/60"
-            >
-              <Icon className="h-4 w-4 text-accent" />
-              {label}
-            </button>
-          ))}
-          {PROMPT_TOOLS.map(({ icon: Icon, label, prompt }) => (
-            <button
-              key={label}
-              onClick={() => handlePromptTool(prompt)}
-              className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-gray-600 transition-colors hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800/60"
-            >
-              <Icon className="h-4 w-4 text-accent" />
-              {label}
-            </button>
-          ))}
+      {/* Tools section — collapsible tray */}
+      <div className="border-t border-gray-200 dark:border-gray-700">
+        {/* Toggle header — always visible */}
+        <button
+          onClick={() => setToolsOpen((o) => !o)}
+          className="flex w-full items-center justify-between px-4 py-2.5 text-xs font-semibold uppercase tracking-wider text-gray-400 transition-colors hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300"
+        >
+          <span>Security Tools</span>
+          <ChevronUp
+            className={cn(
+              'h-3.5 w-3.5 transition-transform duration-200',
+              toolsOpen ? 'rotate-0' : 'rotate-180'
+            )}
+          />
+        </button>
+
+        {/* Collapsible tool list — slides up from bottom */}
+        <div
+          className={cn(
+            'overflow-hidden transition-all duration-200 ease-in-out',
+            toolsOpen ? 'max-h-64 opacity-100 pb-3' : 'max-h-0 opacity-0'
+          )}
+        >
+          <div className="space-y-0.5 px-3">
+            {ROUTE_TOOLS.map(({ icon: Icon, label, route }) => (
+              <button
+                key={label}
+                onClick={() => {
+                  onClose?.();
+                  navigate(route);
+                }}
+                className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-gray-600 transition-colors hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800/60"
+              >
+                <Icon className="h-4 w-4 text-accent" />
+                {label}
+              </button>
+            ))}
+            {PROMPT_TOOLS.map(({ icon: Icon, label, prompt }) => (
+              <button
+                key={label}
+                onClick={() => handlePromptTool(prompt)}
+                className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-gray-600 transition-colors hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800/60"
+              >
+                <Icon className="h-4 w-4 text-accent" />
+                {label}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
