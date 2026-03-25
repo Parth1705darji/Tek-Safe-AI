@@ -43,7 +43,10 @@ export function useChat(conversationId?: string, clerkUserId?: string, activeToo
         data: Message[] | null;
         error: unknown;
       };
-      if (!cancelled && result.data) {
+      // Only overwrite if there are persisted messages — avoids wiping
+      // optimistic messages that sendMessage already added for a brand-new
+      // conversation whose DB rows don't exist yet when load() resolves.
+      if (!cancelled && result.data && result.data.length > 0) {
         setMessages(result.data);
       }
     };
