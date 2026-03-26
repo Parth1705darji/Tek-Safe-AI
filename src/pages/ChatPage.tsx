@@ -10,7 +10,8 @@ import { useChat } from '../hooks/useChat';
 import { useConversations } from '../hooks/useConversations';
 import { useSupabase } from '../hooks/useSupabase';
 import { DAILY_LIMITS } from '../lib/utils';
-import type { User } from '../types';
+import { exportAsWord, exportAsExcel, exportAsPdf, exportAsHtml } from '../lib/exportChat';
+import type { User, Message } from '../types';
 const ChatPage = () => {
   const { conversationId } = useParams<{ conversationId?: string }>();
   const navigate = useNavigate();
@@ -149,6 +150,39 @@ const ChatPage = () => {
     },
     [conversationId, deleteConversation, navigate]
   );
+
+  const handleExportConversation = useCallback(
+    async (id: string, format: 'word' | 'excel' | 'pdf' | 'html') => {
+      const allConvs = [
+        ...groupedConversations.today,
+        ...groupedConversations.yesterday,
+        ...groupedConversations.lastWeek,
+        ...groupedConversations.older,
+      ];
+      const conv = allConvs.find((c) => c.id === id);
+      const title = conv?.title ?? 'Chat Export';
+
+      // If exporting the active conversation, use already-loaded messages
+      let exportMessages: Message[] = [];
+      if (id === conversationId && messages.length > 0) {
+        exportMessages = messages;
+      } else {
+        // Fetch messages for any other conversation
+        const result = (await supabase
+          .from('messages')
+          .select('*')
+          .eq('conversation_id', id)
+          .order('created_at', { ascending: true })) as { data: Message[] | null; error: unknown };
+        exportMessages = result.data ?? [];
+      }
+
+      if (exportMessages.length === 0) return;
+
+      const exportFn = { word: exportAsWord, excel: exportAsExcel, pdf: exportAsPdf, html: exportAsHtml }[format];
+      exportFn(exportMessages, title);
+    },
+    [conversationId, messages, groupedConversations, supabase]
+  );
   const messageLimit = dbUser ? (DAILY_LIMITS[dbUser.tier] ?? 50) : undefined;
   const messageCount = dbUser?.daily_message_count;
   return (
@@ -165,6 +199,7 @@ const ChatPage = () => {
           onSelectChat={handleSelectChat}
           onRename={renameConversation}
           onDelete={handleDeleteConversation}
+          onExport={handleExportConversation}
           isOpen={sidebarOpen}
           onClose={() => setSidebarOpen(false)}
         />
@@ -177,6 +212,7 @@ const ChatPage = () => {
               isLoading={isLoading}
               isStreaming={isStreaming}
               onFeedback={submitFeedback}
+              conversationTitle={activeConversationTitle}
             />
           )}
           {dbUserError && (
