@@ -149,13 +149,30 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
     // classification === 'safe' → continue (no DB write, no rate limit increment on blocked messages)
 
-    // 3. Get chat history (last 10 messages for context)
+    // 3. Get chat history (last 20 messages for context)
     const { data: history } = await supabaseAdmin
       .from('messages')
-      .select('role, content')
+      .select('role, content, created_at')
       .eq('conversation_id', conversationId)
       .order('created_at', { ascending: true })
-      .limit(10);
+      .limit(20);
+
+    // 3b. Duplicate-send guard — reject if the last user message in DB is identical
+    // to the current one AND was sent within the last 30 seconds. This catches the
+    // case where a user double-clicks send or re-submits before the first response arrives.
+    if (history && history.length > 0) {
+      const lastUserMsg = [...history].reverse().find((m) => m.role === 'user');
+      if (lastUserMsg) {
+        const normalize = (s: string) => s.trim().toLowerCase().replace(/\s+/g, ' ');
+        const ageMs = Date.now() - new Date(lastUserMsg.created_at).getTime();
+        if (normalize(lastUserMsg.content) === normalize(message.trim()) && ageMs < 30_000) {
+          // Silently drop: send done so the client clears loading state but show nothing new
+          send({ type: 'info', message: 'Message already received — please wait for the response.' });
+          send({ type: 'done', messageId: null });
+          return res.end();
+        }
+      }
+    }
 
     // 4. Check if title needs generating (conversation still has default "New Chat" title)
     const { data: convRow } = await supabaseAdmin
@@ -253,8 +270,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
     }
 
-    // 7. Build RAG prompt
-    const ragMessages = buildRAGPrompt(kbChunks, history ?? [], message.trim());
+    // 7. Build RAG prompt (strip created_at — RAG builder only needs role + content)
+    const historyForRAG = (history ?? []).map(({ role, content }) => ({ role, content }));
+    const ragMessages = buildRAGPrompt(kbChunks, historyForRAG, message.trim());
 
     // 7b. Inject active tool context into the system message
     const TOOL_CONTEXT: Record<string, string> = {

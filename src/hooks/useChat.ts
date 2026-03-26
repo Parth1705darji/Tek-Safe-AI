@@ -57,7 +57,7 @@ export function useChat(conversationId?: string, clerkUserId?: string, activeToo
   }, [conversationId, supabase]);
   const sendMessage = useCallback(
     async (content: string, convId: string) => {
-      if (!content.trim() || isStreaming || !clerkUserId) return;
+      if (!content.trim() || isStreaming || isLoading || !clerkUserId) return;
       // Optimistic user message — displayed immediately
       const optimisticUserMsg: Message = {
         id: crypto.randomUUID(),

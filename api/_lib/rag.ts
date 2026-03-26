@@ -117,9 +117,11 @@ export function buildRAGPrompt(
           .join('\n\n')
       : 'No relevant Knowledge Base articles found for this query.';
 
+  // Keep up to 20 turns — pairs must alternate user/assistant for coherent context.
+  // Filter out system messages then take the most recent 20 entries.
   const chatHistory: ChatMessage[] = history
-    .slice(-10)
     .filter((m) => m.role === 'user' || m.role === 'assistant')
+    .slice(-20)
     .map((m) => ({ role: m.role as 'user' | 'assistant', content: m.content }));
 
   return [

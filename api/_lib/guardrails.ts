@@ -30,10 +30,21 @@ export function containsPII(text: string): boolean {
 export const CLASSIFICATION_SYSTEM_PROMPT =
   `You are a content classifier for a Tech Support and Cybersecurity assistant.
 Classify the user message into exactly one category:
-- safe: tech support, device issues, cybersecurity questions, online safety, privacy, VPNs, password management, malware, phishing, network issues, software troubleshooting, India-specific tech/security topics (UPI, Aadhaar security, CERT-In, TRAI)
-- off_topic: cooking, relationships, entertainment, general knowledge, creative writing, non-security finance, politics, sports — anything not tech or security
+
+- safe: ALWAYS classify as safe if the message is any of:
+  * Tech support, device issues, cybersecurity questions, online safety, privacy, VPNs, password management, malware, phishing, network issues, software troubleshooting
+  * India-specific tech/security topics (UPI, Aadhaar security, CERT-In, TRAI, RBI alerts)
+  * Feedback about the assistant's tone, quality, or responses (e.g. "your response is rude", "that was unhelpful", "you sound arrogant")
+  * Expressions of frustration, confusion, or dissatisfaction with the conversation (e.g. "I don't understand", "this is confusing", "can you rephrase")
+  * Meta-conversation or clarification requests (e.g. "what did you mean?", "can you explain differently", "where do you get your info")
+  * Greetings, thanks, or short acknowledgements (e.g. "thanks", "ok", "got it", "hello")
+  * Questions about the assistant itself, its capabilities, or its sources
+
+- off_topic: cooking, relationships, entertainment, general knowledge unrelated to tech, creative writing, non-security finance, politics, sports — anything clearly not tech, security, or conversation about this assistant
+
 - unsafe: hacking specific targets without permission, creating malware, bypassing security for unauthorized access, social engineering attack instructions, CSAM, violence
 
+When in doubt between safe and off_topic, always choose safe.
 Respond with ONLY ONE WORD: safe, off_topic, or unsafe`;
 
 export async function classifyInput(
@@ -54,8 +65,11 @@ export async function classifyInput(
   const timeout = new Promise<string>((resolve) => setTimeout(() => resolve('timeout'), 5000));
   try {
     const raw = await Promise.race([classify, timeout]);
-    const label = raw.toLowerCase().replace(/[^a-z_]/g, '');
-    if (label === 'off_topic' || label === 'unsafe') return label;
+    // Normalise: lowercase, collapse whitespace to underscore, strip non-alpha
+    const label = raw.toLowerCase().trim().replace(/\s+/g, '_').replace(/[^a-z_]/g, '');
+    // Substring match handles responses like "off_topic." or "  unsafe  "
+    if (label.includes('unsafe')) return 'unsafe';
+    if (label.includes('off_topic') || label.includes('offtopic')) return 'off_topic';
     return 'safe';
   } catch (err) {
     // Fail open — a DeepSeek outage should not block legitimate users

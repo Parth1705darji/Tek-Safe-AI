@@ -223,7 +223,7 @@ const ChatPage = () => {
           <ChatInput
             onSend={handleSendMessage}
             onStop={stopGenerating}
-            disabled={dbUserLoading || dbUserError}
+            disabled={dbUserLoading || dbUserError || isLoading}
             isStreaming={isStreaming}
             messageCount={messageCount}
             messageLimit={messageLimit}
