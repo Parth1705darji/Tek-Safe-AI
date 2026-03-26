@@ -128,7 +128,7 @@ function ConversationItem({
           </button>
 
           {menuOpen && (
-            <div className="absolute right-0 top-7 z-50 w-40 rounded-lg border border-gray-200 bg-white py-1 shadow-lg dark:border-gray-700 dark:bg-dark-surface">
+            <div className="absolute right-0 top-7 z-50 w-44 rounded-lg border border-gray-200 bg-white py-1 shadow-lg dark:border-gray-700 dark:bg-dark-surface overflow-hidden">
               <button
                 className="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700/60"
                 onClick={() => { setMenuOpen(false); setRenaming(true); setRenameValue(conv.title ?? 'Chat'); }}
@@ -136,34 +136,29 @@ function ConversationItem({
                 <Pencil className="h-3.5 w-3.5" /> Rename
               </button>
 
-              {/* Export sub-menu */}
-              <div className="relative">
-                <button
-                  className="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700/60"
-                  onClick={(e) => { e.stopPropagation(); setExportOpen((o) => !o); }}
-                >
-                  <Download className="h-3.5 w-3.5" />
-                  Export
-                  <span className="ml-auto text-gray-400">›</span>
-                </button>
-                {exportOpen && (
-                  <div className="absolute left-full top-0 z-50 ml-1 w-40 rounded-lg border border-gray-200 bg-white py-1 shadow-lg dark:border-gray-700 dark:bg-dark-surface">
-                    <p className="px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500">
-                      Export as
-                    </p>
-                    {EXPORT_FORMATS.map(({ label, icon: Icon, format }) => (
-                      <button
-                        key={format}
-                        className="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700/60"
-                        onClick={() => { setMenuOpen(false); setExportOpen(false); onExport(format); }}
-                      >
-                        <Icon className="h-3.5 w-3.5 text-accent" />
-                        {label}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
+              {/* Export — inline accordion */}
+              <button
+                className="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700/60"
+                onClick={(e) => { e.stopPropagation(); setExportOpen((o) => !o); }}
+              >
+                <Download className="h-3.5 w-3.5" />
+                Export
+                <span className={`ml-auto text-gray-400 transition-transform duration-150 ${exportOpen ? 'rotate-90' : ''}`}>›</span>
+              </button>
+              {exportOpen && (
+                <div className="border-t border-gray-100 bg-gray-50 dark:border-gray-700 dark:bg-gray-800/40">
+                  {EXPORT_FORMATS.map(({ label, icon: Icon, format }) => (
+                    <button
+                      key={format}
+                      className="flex w-full items-center gap-2 pl-7 pr-3 py-1.5 text-xs text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-700/60"
+                      onClick={() => { setMenuOpen(false); setExportOpen(false); onExport(format); }}
+                    >
+                      <Icon className="h-3 w-3 text-accent" />
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              )}
 
               <button
                 className="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20"
