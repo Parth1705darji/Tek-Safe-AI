@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import { ChevronDown } from 'lucide-react';
 import ChatMessage from './ChatMessage';
 import LoadingIndicator from './LoadingIndicator';
+import ChatExportMenu from './ChatExportMenu';
 import type { Message } from '../../types';
 
 interface ChatAreaProps {
@@ -9,9 +10,10 @@ interface ChatAreaProps {
   isLoading: boolean;
   isStreaming: boolean;
   onFeedback: (messageId: string, feedback: 'up' | 'down', text?: string) => void;
+  conversationTitle?: string;
 }
 
-const ChatArea = ({ messages, isLoading, isStreaming, onFeedback }: ChatAreaProps) => {
+const ChatArea = ({ messages, isLoading, isStreaming, onFeedback, conversationTitle }: ChatAreaProps) => {
   const bottomRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const [showScrollBtn, setShowScrollBtn] = useState(false);
@@ -43,6 +45,16 @@ const ChatArea = ({ messages, isLoading, isStreaming, onFeedback }: ChatAreaProp
 
   return (
     <div className="relative flex-1 overflow-hidden">
+      {/* Export button — floats top-right when there are messages */}
+      {messages.length > 0 && (
+        <div className="absolute right-4 top-3 z-10">
+          <ChatExportMenu
+            messages={messages}
+            title={conversationTitle ?? 'Chat Export'}
+          />
+        </div>
+      )}
+
       <div
         ref={scrollRef}
         className="h-full overflow-y-auto px-4 py-6 scrollbar-chat"

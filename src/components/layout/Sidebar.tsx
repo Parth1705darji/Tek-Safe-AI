@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Plus,
@@ -14,6 +14,10 @@ import {
   Trash2,
   X,
   ChevronUp,
+  Download,
+  FileText,
+  TableProperties,
+  Printer,
 } from 'lucide-react';
 import { cn, truncate } from '../../lib/utils';
 import type { GroupedConversations } from '../../hooks/useConversations';
@@ -26,9 +30,17 @@ interface SidebarProps {
   onSelectChat: (id: string) => void;
   onRename: (id: string, title: string) => void;
   onDelete: (id: string) => void;
+  onExport: (id: string, format: 'word' | 'excel' | 'pdf' | 'html') => void;
   isOpen?: boolean;         // mobile drawer open
   onClose?: () => void;     // mobile drawer close
 }
+
+const EXPORT_FORMATS: { label: string; icon: React.ElementType; format: 'word' | 'excel' | 'pdf' | 'html' }[] = [
+  { label: 'Word (.doc)', icon: FileText, format: 'word' },
+  { label: 'Excel (.xls)', icon: TableProperties, format: 'excel' },
+  { label: 'PDF (print)', icon: Printer, format: 'pdf' },
+  { label: 'HTML (.html)', icon: Globe, format: 'html' },
+];
 
 function ConversationItem({
   conv,
@@ -36,14 +48,17 @@ function ConversationItem({
   onSelect,
   onRename,
   onDelete,
+  onExport,
 }: {
   conv: Conversation;
   isActive: boolean;
   onSelect: () => void;
   onRename: (title: string) => void;
   onDelete: () => void;
+  onExport: (format: 'word' | 'excel' | 'pdf' | 'html') => void;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
+  const [exportOpen, setExportOpen] = useState(false);
   const [renaming, setRenaming] = useState(false);
   const [renameValue, setRenameValue] = useState(conv.title ?? 'Chat');
   const menuRef = useRef<HTMLDivElement>(null);
@@ -53,6 +68,7 @@ function ConversationItem({
     const handler = (e: MouseEvent) => {
       if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
         setMenuOpen(false);
+        setExportOpen(false);
       }
     };
     document.addEventListener('mousedown', handler);
@@ -112,13 +128,43 @@ function ConversationItem({
           </button>
 
           {menuOpen && (
-            <div className="absolute right-0 top-7 z-50 w-36 rounded-lg border border-gray-200 bg-white py-1 shadow-lg dark:border-gray-700 dark:bg-dark-surface">
+            <div className="absolute right-0 top-7 z-50 w-40 rounded-lg border border-gray-200 bg-white py-1 shadow-lg dark:border-gray-700 dark:bg-dark-surface">
               <button
                 className="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700/60"
                 onClick={() => { setMenuOpen(false); setRenaming(true); setRenameValue(conv.title ?? 'Chat'); }}
               >
                 <Pencil className="h-3.5 w-3.5" /> Rename
               </button>
+
+              {/* Export sub-menu */}
+              <div className="relative">
+                <button
+                  className="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700/60"
+                  onClick={(e) => { e.stopPropagation(); setExportOpen((o) => !o); }}
+                >
+                  <Download className="h-3.5 w-3.5" />
+                  Export
+                  <span className="ml-auto text-gray-400">›</span>
+                </button>
+                {exportOpen && (
+                  <div className="absolute left-full top-0 z-50 ml-1 w-40 rounded-lg border border-gray-200 bg-white py-1 shadow-lg dark:border-gray-700 dark:bg-dark-surface">
+                    <p className="px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500">
+                      Export as
+                    </p>
+                    {EXPORT_FORMATS.map(({ label, icon: Icon, format }) => (
+                      <button
+                        key={format}
+                        className="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700/60"
+                        onClick={() => { setMenuOpen(false); setExportOpen(false); onExport(format); }}
+                      >
+                        <Icon className="h-3.5 w-3.5 text-accent" />
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+
               <button
                 className="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20"
                 onClick={() => { setMenuOpen(false); onDelete(); }}
@@ -133,13 +179,14 @@ function ConversationItem({
   );
 }
 
-function SidebarGroup({ label, conversations, activeId, onSelect, onRename, onDelete }: {
+function SidebarGroup({ label, conversations, activeId, onSelect, onRename, onDelete, onExport }: {
   label: string;
   conversations: Conversation[];
   activeId?: string;
   onSelect: (id: string) => void;
   onRename: (id: string, title: string) => void;
   onDelete: (id: string) => void;
+  onExport: (id: string, format: 'word' | 'excel' | 'pdf' | 'html') => void;
 }) {
   if (conversations.length === 0) return null;
   return (
@@ -156,6 +203,7 @@ function SidebarGroup({ label, conversations, activeId, onSelect, onRename, onDe
             onSelect={() => onSelect(conv.id)}
             onRename={(title) => onRename(conv.id, title)}
             onDelete={() => onDelete(conv.id)}
+            onExport={(format) => onExport(conv.id, format)}
           />
         ))}
       </div>
@@ -191,6 +239,7 @@ const SidebarContent = ({
   onSelectChat,
   onRename,
   onDelete,
+  onExport,
   onClose,
 }: Omit<SidebarProps, 'isOpen'>) => {
   const navigate = useNavigate();
@@ -260,6 +309,7 @@ const SidebarContent = ({
               onSelect={onSelectChat}
               onRename={onRename}
               onDelete={onDelete}
+              onExport={onExport}
             />
             <SidebarGroup
               label="Yesterday"
@@ -268,6 +318,7 @@ const SidebarContent = ({
               onSelect={onSelectChat}
               onRename={onRename}
               onDelete={onDelete}
+              onExport={onExport}
             />
             <SidebarGroup
               label="Previous 7 Days"
@@ -276,6 +327,7 @@ const SidebarContent = ({
               onSelect={onSelectChat}
               onRename={onRename}
               onDelete={onDelete}
+              onExport={onExport}
             />
             <SidebarGroup
               label="Older"
@@ -284,6 +336,7 @@ const SidebarContent = ({
               onSelect={onSelectChat}
               onRename={onRename}
               onDelete={onDelete}
+              onExport={onExport}
             />
           </>
         )}
