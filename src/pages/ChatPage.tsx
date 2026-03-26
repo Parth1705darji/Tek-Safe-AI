@@ -20,7 +20,6 @@ const ChatPage = () => {
   const supabase = useSupabase();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [dbUser, setDbUser] = useState<User | null>(null);
-  const [activeTools, setActiveTools] = useState<string[]>([]);
   const [dbUserLoading, setDbUserLoading] = useState(true);
   const [dbUserError, setDbUserError] = useState(false);
   // Holds a message queued for a brand-new conversation.
@@ -55,7 +54,7 @@ const ChatPage = () => {
     refetch: refetchConversations,
   } = useConversations(dbUser?.id);
   const { messages, isLoading, isStreaming, sendMessage, submitFeedback, stopGenerating } =
-    useChat(conversationId, clerkUser?.id, activeTools);
+    useChat(conversationId, clerkUser?.id);
   // After navigating to a new conversation URL, fire any queued message.
   // This runs once conversationId has settled to the new value, guaranteeing
   // that useChat's message-load effect has already cleared state for the
@@ -130,11 +129,6 @@ const ChatPage = () => {
     },
     [conversationId, dbUser, createConversation, navigate, sendMessage, refetchConversations, refetchUser]
   );
-  const handleToolToggle = useCallback((tool: string) => {
-    setActiveTools((prev) =>
-      prev.includes(tool) ? prev.filter((t) => t !== tool) : [...prev, tool]
-    );
-  }, []);
   const activeConversationTitle = conversationId
     ? [
         ...groupedConversations.today,
@@ -227,8 +221,6 @@ const ChatPage = () => {
             isStreaming={isStreaming}
             messageCount={messageCount}
             messageLimit={messageLimit}
-            activeTools={activeTools}
-            onToolToggle={handleToolToggle}
           />
         </main>
       </div>
