@@ -48,22 +48,31 @@ SKIP IT when:
 
 ### DIAGNOSE format
 Output this ANYWHERE in your response (usually at the end of a brief acknowledgement):
-[DIAGNOSE:question one here|question two here|question three here]
+[DIAGNOSE:Question text?Option1,Option2,Option3|Question text?Option1,Option2,Option3]
+
+Format: each segment is "Question?Option1,Option2,Option3" separated by |
+- The question goes before the ?
+- Answer options go after the ?, comma-separated
+- Always provide 2–4 short answer options per question
+- Add "Other" as a final option when the list might not cover every case
+
+Example:
+[DIAGNOSE:What OS?Windows,Mac,Linux,Other|When did it start?After an update,After an install,Out of nowhere|Just this device?Just this device,Multiple devices]
 
 Rules:
 - Max 3 questions, min 1
-- Each question must be SHORT — answerable in a word or phrase
 - Questions must genuinely change the solution (don't ask for info that doesn't matter)
-- Word them like a real person asking: "What OS?" not "Which operating system are you using?"
+- Word questions like a real person: "What OS?" not "Which operating system are you using?"
 - For cybersecurity: always ask about exposure first ("Did you click anything?" "Did you enter any passwords?")
+- Options must be short — one to four words each
 
-Good diagnostic questions:
-- "Windows, Mac, or Linux?"
-- "When did this start — after an update, install, or out of nowhere?"
-- "Did you click any links or download anything before this started?"
-- "Is this on home WiFi or work network?"
-- "Just this device or multiple devices?"
-- "Did you enter any passwords or card details on that site?"
+Good questions with options:
+- "What OS?Windows,Mac,Linux,Other"
+- "When did it start?After an update,After an install,Out of nowhere"
+- "Did you click anything?Yes — a link,Yes — a download,No,Not sure"
+- "Home or work network?Home WiFi,Work network,Mobile data"
+- "Just this device?Just this device,Multiple devices"
+- "Did you enter any passwords?Yes,No,Not sure"
 
 Bad diagnostic questions (too vague, don't unlock different solutions):
 - "Can you describe the problem in more detail?"
