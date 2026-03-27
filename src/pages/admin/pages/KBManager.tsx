@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, Fragment } from 'react';
-import { useUser } from '@clerk/react';
+import { useAdminToken } from '../../../hooks/useAdminToken';
 import { Plus, Edit2, Trash2, Search, X, Tag } from 'lucide-react';
 import { showToast } from '../../../components/common/Toast';
 import { ConfirmModal } from '../components/ConfirmModal';
@@ -18,8 +18,7 @@ interface KBArticle {
 const CATEGORIES = ['tech_support', 'cybersecurity'];
 
 const KBManager = () => {
-  const { user } = useUser();
-  const adminEmail = user?.primaryEmailAddress?.emailAddress ?? '';
+  const adminFetch = useAdminToken();
 
   const [articles, setArticles] = useState<KBArticle[]>([]);
   const [loading, setLoading] = useState(true);
@@ -44,9 +43,7 @@ const KBManager = () => {
   const fetchArticles = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch('/api/admin/stats', {
-        headers: { 'x-admin-email': adminEmail },
-      });
+      const res = await adminFetch('/api/admin/stats');
       if (res.ok) {
         const data = await res.json();
         setArticles(data.kbDocuments ?? []);
@@ -54,11 +51,9 @@ const KBManager = () => {
     } finally {
       setLoading(false);
     }
-  }, [adminEmail]);
+  }, [adminFetch]);
 
-  useEffect(() => {
-    if (adminEmail) fetchArticles();
-  }, [adminEmail, fetchArticles]);
+  useEffect(() => { fetchArticles(); }, [fetchArticles]);
 
   const filtered = articles.filter(a => {
     const matchesSearch = !search ||
@@ -116,12 +111,9 @@ const KBManager = () => {
     }
     setSaving(true);
     try {
-      const res = await fetch('/api/admin/kb', {
+      const res = await adminFetch('/api/admin/kb', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-admin-email': adminEmail,
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(formData),
       });
       if (!res.ok) {
@@ -141,10 +133,7 @@ const KBManager = () => {
   const handleDelete = async (id: string) => {
     setDeleting(true);
     try {
-      const res = await fetch(`/api/admin/kb?id=${id}`, {
-        method: 'DELETE',
-        headers: { 'x-admin-email': adminEmail },
-      });
+      const res = await adminFetch(`/api/admin/kb?id=${id}`, { method: 'DELETE' });
       if (!res.ok) throw new Error('Delete failed');
       showToast('Article deleted');
       setArticles(prev => prev.filter(a => a.id !== id));

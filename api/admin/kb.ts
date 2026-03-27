@@ -1,5 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { createClient } from '@supabase/supabase-js';
+import { verifyAdminRequest, sendAuthError } from '../_lib/adminAuth.js';
+import { writeAuditLog } from '../_lib/auditLog.js';
 
 export const config = { api: { bodyParser: true } };
 
@@ -37,11 +39,11 @@ async function embedText(text: string, openAIKey: string): Promise<number[]> {
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  const adminEmail = process.env.VITE_ADMIN_EMAIL;
-  const requestingEmail = req.headers['x-admin-email'] as string | undefined;
-
-  if (!adminEmail || requestingEmail !== adminEmail) {
-    return res.status(403).json({ error: 'Forbidden' });
+  let admin;
+  try {
+    admin = await verifyAdminRequest(req);
+  } catch (e) {
+    return sendAuthError(res, e);
   }
 
   const supabase = createClient(
@@ -107,6 +109,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
     }
 
+    await writeAuditLog(supabase, {
+      adminClerkId: admin.clerkId,
+      adminEmail: admin.email,
+      action: 'save_kb',
+      targetType: 'kb_document',
+      targetId: doc.id,
+      payload: { title: body.title, category: body.category, subcategory: body.subcategory, chunksEmbedded: embeddedCount },
+      ipAddress: (req.headers['x-forwarded-for'] as string | undefined)?.split(',')[0].trim(),
+    });
+
     return res.status(200).json({
       ok: true,
       documentId: doc.id,
@@ -122,6 +134,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     await supabase.from('kb_embeddings').delete().eq('document_id', id);
     await supabase.from('kb_documents').delete().eq('id', id);
+
+    await writeAuditLog(supabase, {
+      adminClerkId: admin.clerkId,
+      adminEmail: admin.email,
+      action: 'delete_kb',
+      targetType: 'kb_document',
+      targetId: id,
+      ipAddress: (req.headers['x-forwarded-for'] as string | undefined)?.split(',')[0].trim(),
+    });
 
     return res.status(200).json({ deleted: true });
   }

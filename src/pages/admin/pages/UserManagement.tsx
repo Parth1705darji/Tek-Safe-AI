@@ -1,5 +1,5 @@
 import { useState, Fragment } from 'react';
-import { useUser } from '@clerk/react';
+import { useAuth } from '@clerk/react';
 import { Search, ChevronLeft, ChevronRight } from 'lucide-react';
 import { showToast } from '../../../components/common/Toast';
 import { ConfirmModal } from '../components/ConfirmModal';
@@ -7,8 +7,7 @@ import { LoadingSkeleton } from '../components/LoadingSkeleton';
 import { useAdminUsers, type AdminUser } from '../../../hooks/useAdminUsers';
 
 const UserManagement = () => {
-  const { user } = useUser();
-  const adminEmail = user?.primaryEmailAddress?.emailAddress ?? '';
+  const { getToken } = useAuth();
 
   const [search, setSearch] = useState('');
   const [tierFilter, setTierFilter] = useState('');
@@ -29,11 +28,12 @@ const UserManagement = () => {
     if (!roleConfirm) return;
     setUpdatingRole(true);
     try {
+      const token = await getToken();
       const res = await fetch('/api/admin/set-role', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'x-admin-email': adminEmail,
+          Authorization: `Bearer ${token ?? ''}`,
         },
         body: JSON.stringify({
           targetUserId: roleConfirm.userId,

@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { useUser } from '@clerk/react';
+import { useAdminToken } from '../../../hooks/useAdminToken';
 import { CheckCircle2, XCircle, RefreshCw, Database, Key, Server } from 'lucide-react';
 
 interface EnvStatus {
@@ -43,8 +43,7 @@ const StatusRow = ({ label, ok }: { label: string; ok: boolean }) => (
 );
 
 const SystemHealth = () => {
-  const { user } = useUser();
-  const adminEmail = user?.primaryEmailAddress?.emailAddress ?? '';
+  const adminFetch = useAdminToken();
 
   const [env, setEnv] = useState<EnvStatus | null>(null);
   const [dbStats, setDbStats] = useState<DBStats | null>(null);
@@ -55,9 +54,7 @@ const SystemHealth = () => {
     try {
       const [pingRes, dbRes] = await Promise.all([
         fetch('/api/ping'),
-        fetch('/api/admin/stats?include=db', {
-          headers: { 'x-admin-email': adminEmail },
-        }),
+        adminFetch('/api/admin/stats?include=db'),
       ]);
 
       if (pingRes.ok) {
@@ -70,11 +67,9 @@ const SystemHealth = () => {
     } finally {
       setLoading(false);
     }
-  }, [adminEmail]);
+  }, [adminFetch]);
 
-  useEffect(() => {
-    if (adminEmail) fetchData();
-  }, [adminEmail, fetchData]);
+  useEffect(() => { fetchData(); }, [fetchData]);
 
   const allOk = env
     ? env.hasSupabaseUrl && env.hasServiceRole && env.hasDeepSeek && env.hasAdminEmail
