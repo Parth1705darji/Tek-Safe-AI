@@ -1,7 +1,8 @@
 import { useAdminStats } from '../../../hooks/useAdminStats';
-import { BarChart3, TrendingUp, RefreshCw } from 'lucide-react';
+import { BarChart3, TrendingUp, RefreshCw, Users } from 'lucide-react';
 import { LoadingSkeleton } from '../components/LoadingSkeleton';
 import { StatCard } from '../components/StatCard';
+import MiniLineChart from '../components/MiniLineChart';
 
 const AnalyticsPage = () => {
   const { stats, loading, error, refetch } = useAdminStats();
@@ -21,6 +22,14 @@ const AnalyticsPage = () => {
   const totalTools = toolEntries.reduce((a, [, v]) => a + v, 0);
   const feedbackTotal = (stats?.feedback.up ?? 0) + (stats?.feedback.down ?? 0);
 
+  const msgSeries = stats?.timeSeries?.messages ?? [];
+  const userSeries = stats?.timeSeries?.users ?? [];
+  const msgTotal30 = msgSeries.reduce((s, d) => s + d.count, 0);
+  const userTotal30 = userSeries.reduce((s, d) => s + d.count, 0);
+
+  const fmtDate = (d: { date: string }) =>
+    new Date(d.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -36,6 +45,7 @@ const AnalyticsPage = () => {
         </button>
       </div>
 
+      {/* KPI cards */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {loading ? (
           <LoadingSkeleton variant="card" count={3} />
@@ -63,6 +73,39 @@ const AnalyticsPage = () => {
             />
           </>
         )}
+      </div>
+
+      {/* Time-series charts */}
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+        <div className="rounded-2xl border border-gray-800 bg-gray-900 p-5">
+          <div className="mb-1 flex items-center justify-between">
+            <h2 className="font-semibold text-white">Messages (30 days)</h2>
+            <span className="text-sm font-semibold text-[#00D4AA]">
+              {loading ? '—' : msgTotal30.toLocaleString()}
+            </span>
+          </div>
+          <p className="mb-4 text-xs text-gray-500">AI responses generated</p>
+          {loading ? (
+            <div className="h-16 animate-pulse rounded-lg bg-gray-800" />
+          ) : (
+            <MiniLineChart data={msgSeries} color="#00D4AA" height={64} label={fmtDate} />
+          )}
+        </div>
+
+        <div className="rounded-2xl border border-gray-800 bg-gray-900 p-5">
+          <div className="mb-1 flex items-center justify-between">
+            <h2 className="font-semibold text-white">New Users (30 days)</h2>
+            <span className="text-sm font-semibold text-purple-400">
+              {loading ? '—' : userTotal30.toLocaleString()}
+            </span>
+          </div>
+          <p className="mb-4 text-xs text-gray-500">Accounts created</p>
+          {loading ? (
+            <div className="h-16 animate-pulse rounded-lg bg-gray-800" />
+          ) : (
+            <MiniLineChart data={userSeries} color="#a855f7" height={64} label={fmtDate} />
+          )}
+        </div>
       </div>
 
       {/* Tool Usage Breakdown */}
@@ -132,12 +175,30 @@ const AnalyticsPage = () => {
         )}
       </div>
 
-      <div className="rounded-2xl border border-gray-700/50 bg-gray-900/50 p-5 text-center">
-        <BarChart3 className="mx-auto mb-2 h-8 w-8 text-gray-600" />
-        <p className="text-sm font-medium text-gray-400">Time-Series Charts</p>
-        <p className="mt-1 text-xs text-gray-600">
-          Daily message trends and user growth charts will appear here once analytics_events table has 7+ days of data.
-        </p>
+      {/* User Growth */}
+      <div className="rounded-2xl border border-gray-800 bg-gray-900 p-5">
+        <div className="mb-4 flex items-center gap-2">
+          <Users className="h-4 w-4 text-[#00D4AA]" />
+          <h2 className="font-semibold text-white">User Growth</h2>
+        </div>
+        {loading ? (
+          <div className="h-16 animate-pulse rounded-lg bg-gray-800" />
+        ) : (
+          <div className="grid grid-cols-3 gap-4">
+            <div className="rounded-xl bg-gray-800 p-3 text-center">
+              <p className="text-xl font-bold text-white">{stats?.users.total ?? 0}</p>
+              <p className="text-xs text-gray-400">Total Users</p>
+            </div>
+            <div className="rounded-xl bg-gray-800 p-3 text-center">
+              <p className="text-xl font-bold text-[#00D4AA]">+{stats?.users.today ?? 0}</p>
+              <p className="text-xs text-gray-400">Today</p>
+            </div>
+            <div className="rounded-xl bg-gray-800 p-3 text-center">
+              <p className="text-xl font-bold text-purple-400">+{stats?.users.thisWeek ?? 0}</p>
+              <p className="text-xs text-gray-400">This Week</p>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

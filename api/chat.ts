@@ -103,12 +103,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // 1. Resolve Supabase user from Clerk ID
     const { data: user } = await supabaseAdmin
       .from('users')
-      .select('id, tier, daily_message_count, daily_message_reset_at')
+      .select('id, tier, daily_message_count, daily_message_reset_at, is_suspended')
       .eq('clerk_id', userId)
       .single();
 
     if (!user) {
       send({ type: 'error', message: 'User not found. Please refresh and try again.' });
+      return res.end();
+    }
+
+    // 1b. Check suspension
+    if (user.is_suspended) {
+      send({ type: 'error', message: 'Your account has been suspended. Please contact support.' });
       return res.end();
     }
 

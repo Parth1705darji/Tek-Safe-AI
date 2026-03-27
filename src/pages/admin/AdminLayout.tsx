@@ -4,7 +4,7 @@ import { useUser } from '@clerk/react';
 import {
   Shield, LayoutDashboard, Database, Users,
   BarChart3, Activity, Menu, X, LogOut,
-  ChevronRight, Bell
+  ChevronRight, Bell, MessageSquare,
 } from 'lucide-react';
 
 interface AdminLayoutProps {
@@ -15,6 +15,7 @@ const NAV_ITEMS = [
   { label: 'Dashboard', icon: LayoutDashboard, href: '/admin' },
   { label: 'Knowledge Base', icon: Database, href: '/admin/kb' },
   { label: 'Users', icon: Users, href: '/admin/users' },
+  { label: 'Conversations', icon: MessageSquare, href: '/admin/conversations' },
   { label: 'Analytics', icon: BarChart3, href: '/admin/analytics' },
   { label: 'System', icon: Activity, href: '/admin/system' },
 ];

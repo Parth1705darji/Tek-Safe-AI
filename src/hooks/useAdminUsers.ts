@@ -10,6 +10,9 @@ export interface AdminUser {
   tier: string;
   role: string;
   daily_message_count: number;
+  is_suspended: boolean;
+  suspended_at: string | null;
+  suspended_reason: string | null;
   created_at: string;
 }
 

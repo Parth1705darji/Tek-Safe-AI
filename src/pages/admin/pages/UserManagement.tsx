@@ -1,13 +1,28 @@
 import { useState, Fragment } from 'react';
 import { useAuth } from '@clerk/react';
-import { Search, ChevronLeft, ChevronRight } from 'lucide-react';
+import {
+  Search, ChevronLeft, ChevronRight, Download,
+  ShieldOff, ShieldCheck, RefreshCw, Trash2, ChevronDown,
+} from 'lucide-react';
 import { showToast } from '../../../components/common/Toast';
 import { ConfirmModal } from '../components/ConfirmModal';
 import { LoadingSkeleton } from '../components/LoadingSkeleton';
 import { useAdminUsers, type AdminUser } from '../../../hooks/useAdminUsers';
+import { useAdminToken } from '../../../hooks/useAdminToken';
+
+type ActionKey = 'role' | 'tier' | 'suspend' | 'unsuspend' | 'reset_quota' | 'delete';
+
+interface PendingAction {
+  key: ActionKey;
+  user: AdminUser;
+  extra?: string; // new tier value
+}
+
+const TIER_OPTIONS = ['free', 'pro', 'team', 'premium'] as const;
 
 const UserManagement = () => {
   const { getToken } = useAuth();
+  const adminFetch = useAdminToken();
 
   const [search, setSearch] = useState('');
   const [tierFilter, setTierFilter] = useState('');
@@ -15,43 +30,106 @@ const UserManagement = () => {
   const [page, setPage] = useState(1);
 
   const { data, loading, error, refetch } = useAdminUsers({
-    search,
-    tier: tierFilter,
-    role: roleFilter,
-    page,
+    search, tier: tierFilter, role: roleFilter, page,
   });
 
-  const [roleConfirm, setRoleConfirm] = useState<{ userId: string; name: string; newRole: 'user' | 'admin' } | null>(null);
-  const [updatingRole, setUpdatingRole] = useState(false);
+  const [pending, setPending] = useState<PendingAction | null>(null);
+  const [acting, setActing] = useState(false);
+  const [openMenuId, setOpenMenuId] = useState<string | null>(null);
 
-  const handleRoleChange = async () => {
-    if (!roleConfirm) return;
-    setUpdatingRole(true);
+  // ── Role change (uses separate set-role endpoint) ──────────────────────────
+  const handleRoleChange = async (u: AdminUser, newRole: 'user' | 'admin') => {
+    setActing(true);
     try {
       const token = await getToken();
       const res = await fetch('/api/admin/set-role', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token ?? ''}`,
-        },
-        body: JSON.stringify({
-          targetUserId: roleConfirm.userId,
-          role: roleConfirm.newRole,
-        }),
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token ?? ''}` },
+        body: JSON.stringify({ targetUserId: u.clerk_id, role: newRole }),
       });
       if (!res.ok) {
         const err = await res.json();
         throw new Error(err.error ?? 'Failed to update role');
       }
-      showToast(`Role updated. User must re-login to see changes.`);
-      setRoleConfirm(null);
+      showToast('Role updated. User must re-login to see changes.');
       refetch();
     } catch (e) {
       showToast((e as Error).message);
     } finally {
-      setUpdatingRole(false);
+      setActing(false);
+      setPending(null);
     }
+  };
+
+  // ── Generic user-actions endpoint ─────────────────────────────────────────
+  const callUserAction = async (action: string, clerkId: string, extra?: Record<string, string>) => {
+    const res = await adminFetch('/api/admin/user-actions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action, clerkId, ...extra }),
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.error ?? 'Action failed');
+    }
+  };
+
+  const handleConfirm = async () => {
+    if (!pending) return;
+    setActing(true);
+    try {
+      const { key, user: u, extra } = pending;
+      if (key === 'role') {
+        const newRole = u.role === 'admin' ? 'user' : 'admin';
+        await handleRoleChange(u, newRole);
+        return; // handleRoleChange manages its own cleanup
+      }
+      if (key === 'tier' && extra) {
+        await callUserAction('set_tier', u.clerk_id, { tier: extra });
+        showToast(`Tier updated to ${extra}`);
+      } else if (key === 'suspend') {
+        await callUserAction('suspend', u.clerk_id);
+        showToast('User suspended');
+      } else if (key === 'unsuspend') {
+        await callUserAction('unsuspend', u.clerk_id);
+        showToast('User unsuspended');
+      } else if (key === 'reset_quota') {
+        await callUserAction('reset_quota', u.clerk_id);
+        showToast('Quota reset');
+      } else if (key === 'delete') {
+        await callUserAction('delete_user', u.clerk_id);
+        showToast('User deleted');
+      }
+      refetch();
+    } catch (e) {
+      showToast((e as Error).message);
+    } finally {
+      setActing(false);
+      setPending(null);
+    }
+  };
+
+  // ── CSV export ─────────────────────────────────────────────────────────────
+  const exportCSV = () => {
+    const users = data?.users ?? [];
+    const header = ['Email', 'Name', 'Tier', 'Role', 'Messages', 'Suspended', 'Joined'];
+    const rows = users.map(u => [
+      u.email,
+      u.display_name ?? '',
+      u.tier,
+      u.role,
+      u.daily_message_count,
+      u.is_suspended ? 'Yes' : 'No',
+      new Date(u.created_at).toLocaleDateString('en-GB'),
+    ]);
+    const csv = [header, ...rows].map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `users-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
   };
 
   const getInitials = (u: AdminUser) => {
@@ -59,13 +137,33 @@ const UserManagement = () => {
     return u.email[0].toUpperCase();
   };
 
+  const confirmMessage = (p: PendingAction): string => {
+    const name = p.user.display_name ?? p.user.email;
+    switch (p.key) {
+      case 'role': return `Change ${name}'s role to ${p.user.role === 'admin' ? 'user' : 'admin'}? They must re-login to see changes.`;
+      case 'tier': return `Change ${name}'s tier to ${p.extra}?`;
+      case 'suspend': return `Suspend ${name}? They won't be able to use the chat.`;
+      case 'unsuspend': return `Unsuspend ${name}? They'll regain access to the chat.`;
+      case 'reset_quota': return `Reset ${name}'s daily message quota to 0?`;
+      case 'delete': return `Permanently delete ${name} and all their data? This cannot be undone.`;
+    }
+  };
+
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-xl font-bold text-white">User Management</h1>
-        <p className="text-sm text-gray-400">
-          {data ? `${data.total} total users` : 'Loading...'}
-        </p>
+    <div className="space-y-6" onClick={() => setOpenMenuId(null)}>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-xl font-bold text-white">User Management</h1>
+          <p className="text-sm text-gray-400">
+            {data ? `${data.total} total users` : 'Loading...'}
+          </p>
+        </div>
+        <button
+          onClick={exportCSV}
+          className="flex items-center gap-2 rounded-xl border border-gray-700 px-3 py-1.5 text-xs text-gray-400 hover:border-[#00D4AA] hover:text-[#00D4AA] transition-colors"
+        >
+          <Download className="h-3.5 w-3.5" /> Export CSV
+        </button>
       </div>
 
       {/* Filters */}
@@ -85,10 +183,7 @@ const UserManagement = () => {
           className="rounded-xl border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-white focus:border-[#00D4AA] focus:outline-none"
         >
           <option value="">All Tiers</option>
-          <option value="free">Free</option>
-          <option value="pro">Pro</option>
-          <option value="team">Team</option>
-          <option value="premium">Premium</option>
+          {TIER_OPTIONS.map(t => <option key={t} value={t}>{t}</option>)}
         </select>
         <select
           value={roleFilter}
@@ -116,7 +211,8 @@ const UserManagement = () => {
                 <th className="px-5 py-3 text-xs font-medium uppercase tracking-wide text-gray-500">User</th>
                 <th className="px-5 py-3 text-xs font-medium uppercase tracking-wide text-gray-500">Tier</th>
                 <th className="px-5 py-3 text-xs font-medium uppercase tracking-wide text-gray-500">Role</th>
-                <th className="px-5 py-3 text-xs font-medium uppercase tracking-wide text-gray-500">Messages</th>
+                <th className="px-5 py-3 text-xs font-medium uppercase tracking-wide text-gray-500">Status</th>
+                <th className="px-5 py-3 text-xs font-medium uppercase tracking-wide text-gray-500">Msgs</th>
                 <th className="px-5 py-3 text-xs font-medium uppercase tracking-wide text-gray-500">Joined</th>
                 <th className="px-5 py-3 text-xs font-medium uppercase tracking-wide text-gray-500">Actions</th>
               </tr>
@@ -126,14 +222,14 @@ const UserManagement = () => {
                 <LoadingSkeleton variant="table-row" count={8} />
               ) : !data?.users.length ? (
                 <tr>
-                  <td colSpan={6} className="px-5 py-12 text-center text-gray-500">
+                  <td colSpan={7} className="px-5 py-12 text-center text-gray-500">
                     {search || tierFilter || roleFilter ? 'No users match your filters' : 'No users yet'}
                   </td>
                 </tr>
               ) : (
                 data.users.map(u => (
                   <Fragment key={u.id}>
-                    <tr className="border-b border-gray-800/50 hover:bg-gray-800/30">
+                    <tr className={`border-b border-gray-800/50 hover:bg-gray-800/30 ${u.is_suspended ? 'opacity-60' : ''}`}>
                       <td className="px-5 py-3">
                         <div className="flex items-center gap-3">
                           {u.avatar_url ? (
@@ -162,37 +258,101 @@ const UserManagement = () => {
                           u.role === 'admin' ? 'bg-red-500/20 text-red-400' : 'bg-gray-700 text-gray-300'
                         }`}>{u.role ?? 'user'}</span>
                       </td>
+                      <td className="px-5 py-3">
+                        {u.is_suspended ? (
+                          <span className="inline-flex items-center gap-1 rounded-full bg-red-500/20 px-2 py-0.5 text-xs font-medium text-red-400">
+                            <ShieldOff className="h-3 w-3" /> Suspended
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 rounded-full bg-green-500/20 px-2 py-0.5 text-xs font-medium text-green-400">
+                            <ShieldCheck className="h-3 w-3" /> Active
+                          </span>
+                        )}
+                      </td>
                       <td className="px-5 py-3 text-gray-300">{u.daily_message_count}</td>
                       <td className="px-5 py-3 text-gray-400 text-xs">
                         {new Date(u.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
                       </td>
                       <td className="px-5 py-3">
-                        {u.role === 'admin' ? (
+                        {/* Actions dropdown */}
+                        <div className="relative" onClick={e => e.stopPropagation()}>
                           <button
-                            onClick={() => setRoleConfirm({ userId: u.clerk_id, name: u.display_name ?? u.email, newRole: 'user' })}
-                            className="rounded-lg border border-gray-700 px-2 py-1 text-xs text-gray-400 hover:border-red-500/50 hover:text-red-400 transition-colors"
+                            onClick={() => setOpenMenuId(openMenuId === u.id ? null : u.id)}
+                            className="flex items-center gap-1 rounded-lg border border-gray-700 px-2 py-1 text-xs text-gray-400 hover:border-[#00D4AA] hover:text-[#00D4AA] transition-colors"
                           >
-                            Make User
+                            Actions <ChevronDown className="h-3 w-3" />
                           </button>
-                        ) : (
-                          <button
-                            onClick={() => setRoleConfirm({ userId: u.clerk_id, name: u.display_name ?? u.email, newRole: 'admin' })}
-                            className="rounded-lg border border-gray-700 px-2 py-1 text-xs text-gray-400 hover:border-[#00D4AA]/50 hover:text-[#00D4AA] transition-colors"
-                          >
-                            Make Admin
-                          </button>
-                        )}
+
+                          {openMenuId === u.id && (
+                            <div className="absolute right-0 top-8 z-20 w-44 rounded-xl border border-gray-700 bg-gray-900 py-1 shadow-xl">
+                              {/* Role */}
+                              <button
+                                onClick={() => { setPending({ key: 'role', user: u }); setOpenMenuId(null); }}
+                                className="flex w-full items-center gap-2 px-3 py-2 text-xs text-gray-300 hover:bg-gray-800 hover:text-white"
+                              >
+                                {u.role === 'admin' ? 'Make User' : 'Make Admin'}
+                              </button>
+
+                              {/* Tier sub-section */}
+                              <div className="border-t border-gray-800 px-3 py-1 text-[10px] font-medium uppercase tracking-wider text-gray-600">
+                                Set Tier
+                              </div>
+                              {TIER_OPTIONS.filter(t => t !== u.tier).map(t => (
+                                <button
+                                  key={t}
+                                  onClick={() => { setPending({ key: 'tier', user: u, extra: t }); setOpenMenuId(null); }}
+                                  className="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-gray-300 hover:bg-gray-800 hover:text-white capitalize"
+                                >
+                                  {t}
+                                </button>
+                              ))}
+
+                              {/* Suspend / Unsuspend */}
+                              <div className="border-t border-gray-800 mt-1 pt-1">
+                                {u.is_suspended ? (
+                                  <button
+                                    onClick={() => { setPending({ key: 'unsuspend', user: u }); setOpenMenuId(null); }}
+                                    className="flex w-full items-center gap-2 px-3 py-2 text-xs text-green-400 hover:bg-gray-800"
+                                  >
+                                    <ShieldCheck className="h-3.5 w-3.5" /> Unsuspend
+                                  </button>
+                                ) : (
+                                  <button
+                                    onClick={() => { setPending({ key: 'suspend', user: u }); setOpenMenuId(null); }}
+                                    className="flex w-full items-center gap-2 px-3 py-2 text-xs text-yellow-400 hover:bg-gray-800"
+                                  >
+                                    <ShieldOff className="h-3.5 w-3.5" /> Suspend
+                                  </button>
+                                )}
+                                <button
+                                  onClick={() => { setPending({ key: 'reset_quota', user: u }); setOpenMenuId(null); }}
+                                  className="flex w-full items-center gap-2 px-3 py-2 text-xs text-gray-300 hover:bg-gray-800"
+                                >
+                                  <RefreshCw className="h-3.5 w-3.5" /> Reset Quota
+                                </button>
+                                <button
+                                  onClick={() => { setPending({ key: 'delete', user: u }); setOpenMenuId(null); }}
+                                  className="flex w-full items-center gap-2 px-3 py-2 text-xs text-red-400 hover:bg-red-500/10"
+                                >
+                                  <Trash2 className="h-3.5 w-3.5" /> Delete User
+                                </button>
+                              </div>
+                            </div>
+                          )}
+                        </div>
                       </td>
                     </tr>
-                    {roleConfirm?.userId === u.clerk_id && (
+
+                    {/* Confirm modal row */}
+                    {pending?.user.id === u.id && (
                       <tr className="border-b border-gray-800/50 bg-gray-800/20">
-                        <td colSpan={6} className="px-5 py-2">
+                        <td colSpan={7} className="px-5 py-2">
                           <ConfirmModal
-                            message={`Change ${roleConfirm.name}'s role to ${roleConfirm.newRole}? They must re-login to see changes.`}
-                            onConfirm={handleRoleChange}
-                            onCancel={() => setRoleConfirm(null)}
-                            isLoading={updatingRole}
-                            variant="warning"
+                            message={confirmMessage(pending)}
+                            onConfirm={handleConfirm}
+                            onCancel={() => setPending(null)}
+                            isLoading={acting}
+                            variant={pending.key === 'delete' ? 'danger' : 'warning'}
                           />
                         </td>
                       </tr>
