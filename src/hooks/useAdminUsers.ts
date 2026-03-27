@@ -48,7 +48,9 @@ export function useAdminUsers(filters: {
     try {
       const res = await adminFetch(`/api/admin/users?${params}`);
       if (!res.ok) {
-        setError('Failed to load users');
+        let detail = '';
+        try { detail = (await res.json()).error ?? ''; } catch { /* ignore */ }
+        setError(`Failed to load users (${res.status}${detail ? ': ' + detail : ''})`);
         return;
       }
       setData(await res.json());
