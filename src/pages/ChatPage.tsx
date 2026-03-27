@@ -53,7 +53,7 @@ const ChatPage = () => {
     deleteConversation,
     refetch: refetchConversations,
   } = useConversations(dbUser?.id);
-  const { messages, isLoading, isStreaming, sendMessage, submitFeedback, stopGenerating } =
+  const { messages, isLoading, isStreaming, sendMessage, submitFeedback, stopGenerating, answerDiagnostic } =
     useChat(conversationId, clerkUser?.id);
   // After navigating to a new conversation URL, fire any queued message.
   // This runs once conversationId has settled to the new value, guaranteeing
@@ -206,6 +206,7 @@ const ChatPage = () => {
               isLoading={isLoading}
               isStreaming={isStreaming}
               onFeedback={submitFeedback}
+              onDiagnosticAnswer={answerDiagnostic}
               conversationTitle={activeConversationTitle}
             />
           )}

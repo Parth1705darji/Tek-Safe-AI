@@ -6,6 +6,7 @@ import { formatRelativeTime } from '../../lib/utils';
 import { showToast } from '../common/Toast';
 import FeedbackWidget from './FeedbackWidget';
 import ToolCard from './ToolCard';
+import DiagnosticCard from './DiagnosticCard';
 import type { Message, BreachCheckResult, UrlScanResult, IpCheckResult } from '../../types';
 
 // ─── Code block with copy button ─────────────────────────────────────────────
@@ -176,9 +177,10 @@ interface ChatMessageProps {
   message: Message;
   isStreaming?: boolean;
   onFeedback: (messageId: string, feedback: 'up' | 'down', text?: string) => void;
+  onDiagnosticAnswer?: (messageId: string, answer: string) => void;
 }
 
-const ChatMessage = ({ message, isStreaming = false, onFeedback }: ChatMessageProps) => {
+const ChatMessage = ({ message, isStreaming = false, onFeedback, onDiagnosticAnswer }: ChatMessageProps) => {
   const isUser = message.role === 'user';
 
   if (isUser) {
@@ -246,6 +248,15 @@ const ChatMessage = ({ message, isStreaming = false, onFeedback }: ChatMessagePr
                 ))}
               </div>
             </div>
+          )}
+
+          {/* Diagnostic question card */}
+          {message.diagnose_questions && message.diagnose_questions.length > 0 && !isStreaming && (
+            <DiagnosticCard
+              questions={message.diagnose_questions}
+              answered={message.diagnose_answered ?? false}
+              onAnswer={(answer) => onDiagnosticAnswer?.(message.id, answer)}
+            />
           )}
         </div>
 

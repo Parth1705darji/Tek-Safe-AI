@@ -7,6 +7,7 @@ type SSEEvent =
   | { type: 'sources'; sources: KBSource[] }
   | { type: 'tool'; tool: Message['tool_used']; params: string }
   | { type: 'title'; title: string }
+  | { type: 'diagnose'; questions: string[] }
   | { type: 'done'; messageId: string | null }
   | { type: 'error'; message: string }
   | { type: 'info'; message: string };
@@ -67,6 +68,8 @@ export function useChat(conversationId?: string, clerkUserId?: string, activeToo
         sources: [],
         tool_used: null,
         tool_result: null,
+        diagnose_questions: null,
+        diagnose_answered: false,
         feedback: null,
         feedback_text: null,
         created_at: new Date().toISOString(),
@@ -85,6 +88,8 @@ export function useChat(conversationId?: string, clerkUserId?: string, activeToo
         sources: [],
         tool_used: null,
         tool_result: null,
+        diagnose_questions: null,
+        diagnose_answered: false,
         feedback: null,
         feedback_text: null,
         created_at: new Date().toISOString(),
@@ -164,6 +169,15 @@ export function useChat(conversationId?: string, clerkUserId?: string, activeToo
                   setMessages((prev) =>
                     prev.map((m) =>
                       m.id === aiMsgLocalId ? { ...m, tool_used: event.tool } : m
+                    )
+                  );
+                  break;
+                case 'diagnose':
+                  setMessages((prev) =>
+                    prev.map((m) =>
+                      m.id === aiMsgLocalId
+                        ? { ...m, diagnose_questions: event.questions, diagnose_answered: false }
+                        : m
                     )
                   );
                   break;
@@ -272,6 +286,31 @@ export function useChat(conversationId?: string, clerkUserId?: string, activeToo
     setIsStreaming(false);
     setIsLoading(false);
   }, []);
+  const answerDiagnostic = useCallback(
+    async (messageId: string, answer: string) => {
+      if (!clerkUserId || !conversationId) return;
+
+      // Mark the diagnostic card as answered optimistically
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === messageId ? { ...m, diagnose_answered: true } : m
+        )
+      );
+
+      // Persist answered state (non-fatal)
+      supabase
+        .from('messages')
+        .update({ diagnose_answered: true })
+        .eq('id', messageId)
+        .then(() => {})
+        .catch(() => {});
+
+      // Send the answer as a new user message into the same conversation
+      await sendMessage(answer, conversationId);
+    },
+    [clerkUserId, conversationId, sendMessage, supabase]
+  );
+
   const submitFeedback = useCallback(
     async (messageId: string, feedback: 'up' | 'down', feedbackText?: string) => {
       // Optimistic update first
@@ -295,5 +334,5 @@ export function useChat(conversationId?: string, clerkUserId?: string, activeToo
     },
     [clerkUserId]
   );
-  return { messages, isLoading, isStreaming, sendMessage, submitFeedback, stopGenerating };
+  return { messages, isLoading, isStreaming, sendMessage, submitFeedback, stopGenerating, answerDiagnostic };
 }

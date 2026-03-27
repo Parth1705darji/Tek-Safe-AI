@@ -6,7 +6,8 @@ import {
   searchKnowledgeBase,
   buildRAGPrompt,
   parseToolTriggers,
-  cleanResponse,
+  parseDiagnosticTrigger,
+  cleanResponseWithDiagnose,
   generateTitle,
   type KBChunk,
 } from './_lib/rag.js';
@@ -336,15 +337,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
     }
 
-    // 9. Parse tool triggers and clean response text
+    // 9. Parse tool triggers and diagnostic trigger
     const tools = parseToolTriggers(fullContent);
+    const diagnostic = parseDiagnosticTrigger(fullContent);
 
     // ── Guardrail: output checks ──────────────────────────────────────────────
     let safeContent = scanOutputForPII(fullContent);
     if (isJailbreakResponse(safeContent)) {
       safeContent = 'I can only assist with tech support and cybersecurity topics.';
     }
-    const cleanContent = cleanResponse(safeContent);
+    const cleanContent = cleanResponseWithDiagnose(safeContent);
 
     // 10. Save AI message to DB
     const sources = kbChunks.map((c) => ({
@@ -363,6 +365,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         sources,
         tool_used: tools.length > 0 ? tools[0].type : null,
         tool_result: null, // Security API execution handled in Step 6
+        diagnose_questions: diagnostic?.questions ?? null,
+        diagnose_answered: false,
       })
       .select('id')
       .single();
@@ -387,6 +391,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // 11. Emit tool trigger event if detected (UI renders ToolCard in loading state)
     if (tools.length > 0) {
       send({ type: 'tool', tool: tools[0].type, params: tools[0].params });
+    }
+
+    // 11b. Emit diagnostic event if detected
+    if (diagnostic) {
+      send({ type: 'diagnose', questions: diagnostic.questions });
     }
 
     // 12. Await title generation (started concurrently in step 5b — usually already done)
