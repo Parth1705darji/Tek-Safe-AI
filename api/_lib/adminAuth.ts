@@ -6,7 +6,7 @@
  * we verify it cryptographically then confirm role === 'admin' in Supabase.
  */
 
-import { createClerkClient } from '@clerk/backend';
+import { verifyToken } from '@clerk/backend';
 import { createClient } from '@supabase/supabase-js';
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 
@@ -38,8 +38,9 @@ export async function verifyAdminRequest(req: VercelRequest): Promise<AdminIdent
   // 2. Verify JWT signature with Clerk — this proves the token is real and not expired
   let clerkId: string;
   try {
-    const clerk = createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY! });
-    const payload = await clerk.verifyToken(token);
+    const payload = await verifyToken(token, {
+      secretKey: process.env.CLERK_SECRET_KEY!,
+    });
     clerkId = payload.sub;
   } catch {
     throw Object.assign(new Error('Invalid or expired session token'), { status: 401 });
