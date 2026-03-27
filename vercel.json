@@ -43,13 +43,13 @@
     "api/ping.ts": { "maxDuration": 10 },
     "api/conversations.ts": { "maxDuration": 10 },
     "api/feedback.ts": { "maxDuration": 10 },
-    "api/tools/breach-check.ts": { "maxDuration": 15 },
-    "api/tools/url-scan.ts": { "maxDuration": 15 },
-    "api/tools/ip-check.ts": { "maxDuration": 15 },
+    "api/tools/[tool].ts": { "maxDuration": 15 },
     "api/webhooks/clerk.ts": { "maxDuration": 10 },
     "api/admin/stats.ts": { "maxDuration": 15 },
     "api/admin/kb.ts": { "maxDuration": 60 },
     "api/admin/users.ts": { "maxDuration": 10 },
-    "api/admin/set-role.ts": { "maxDuration": 10 }
+    "api/admin/set-role.ts": { "maxDuration": 10 },
+    "api/admin/user-actions.ts": { "maxDuration": 15 },
+    "api/admin/conversations.ts": { "maxDuration": 10 }
   }
 }
