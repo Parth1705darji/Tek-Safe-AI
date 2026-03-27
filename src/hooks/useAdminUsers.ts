@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { useUser } from '@clerk/react';
+import { useAdminToken } from './useAdminToken';
 
 export interface AdminUser {
   id: string;
@@ -26,16 +26,12 @@ export function useAdminUsers(filters: {
   role: string;
   page: number;
 }) {
-  const { user } = useUser();
+  const adminFetch = useAdminToken();
   const [data, setData] = useState<AdminUsersResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const fetchUsers = useCallback(async () => {
-    if (!user) return;
-    const email = user.primaryEmailAddress?.emailAddress;
-    if (!email) return;
-
     setLoading(true);
     setError(null);
 
@@ -47,22 +43,18 @@ export function useAdminUsers(filters: {
     });
 
     try {
-      const res = await fetch(`/api/admin/users?${params}`, {
-        headers: { 'x-admin-email': email },
-      });
-
+      const res = await adminFetch(`/api/admin/users?${params}`);
       if (!res.ok) {
         setError('Failed to load users');
         return;
       }
-
       setData(await res.json());
     } catch (e) {
       setError((e as Error).message);
     } finally {
       setLoading(false);
     }
-  }, [user, filters.search, filters.tier, filters.role, filters.page]);
+  }, [adminFetch, filters.search, filters.tier, filters.role, filters.page]);
 
   useEffect(() => { fetchUsers(); }, [fetchUsers]);
 

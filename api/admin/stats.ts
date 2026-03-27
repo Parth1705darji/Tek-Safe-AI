@@ -1,16 +1,16 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { createClient } from '@supabase/supabase-js';
+import { verifyAdminRequest, sendAuthError } from '../_lib/adminAuth.js';
 
 export const config = { api: { bodyParser: true } };
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'GET') return res.status(405).end();
 
-  const adminEmail = process.env.VITE_ADMIN_EMAIL;
-  const requestingEmail = req.headers['x-admin-email'] as string | undefined;
-
-  if (!adminEmail || requestingEmail !== adminEmail) {
-    return res.status(403).json({ error: 'Forbidden' });
+  try {
+    await verifyAdminRequest(req);
+  } catch (e) {
+    return sendAuthError(res, e);
   }
 
   const supabase = createClient(
