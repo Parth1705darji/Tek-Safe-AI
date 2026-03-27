@@ -10,10 +10,11 @@ interface ChatAreaProps {
   isLoading: boolean;
   isStreaming: boolean;
   onFeedback: (messageId: string, feedback: 'up' | 'down', text?: string) => void;
+  onDiagnosticAnswer?: (messageId: string, answer: string) => void;
   conversationTitle?: string;
 }
 
-const ChatArea = ({ messages, isLoading, isStreaming, onFeedback, conversationTitle }: ChatAreaProps) => {
+const ChatArea = ({ messages, isLoading, isStreaming, onFeedback, onDiagnosticAnswer, conversationTitle }: ChatAreaProps) => {
   const bottomRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const [showScrollBtn, setShowScrollBtn] = useState(false);
@@ -66,6 +67,7 @@ const ChatArea = ({ messages, isLoading, isStreaming, onFeedback, conversationTi
               message={msg}
               isStreaming={isStreaming && i === messages.length - 1 && msg.role === 'assistant'}
               onFeedback={onFeedback}
+              onDiagnosticAnswer={onDiagnosticAnswer}
             />
           ))}
 

@@ -32,6 +32,8 @@ export type Message = {
   sources: KBSource[];
   tool_used: 'breach_check' | 'url_scan' | 'ip_check' | null;
   tool_result: Record<string, unknown> | null;
+  diagnose_questions: string[] | null;
+  diagnose_answered: boolean;
   feedback: 'up' | 'down' | null;
   feedback_text: string | null;
   created_at: string;
@@ -165,6 +167,8 @@ export interface Database {
           sources?: KBSource[];
           tool_used?: 'breach_check' | 'url_scan' | 'ip_check' | null;
           tool_result?: Record<string, unknown> | null;
+          diagnose_questions?: string[] | null;
+          diagnose_answered?: boolean;
           feedback?: 'up' | 'down' | null;
           feedback_text?: string | null;
           created_at?: string;
