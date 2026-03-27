@@ -42,7 +42,9 @@ export function useAdminStats() {
     try {
       const res = await adminFetch('/api/admin/stats');
       if (!res.ok) {
-        setError('Failed to load stats');
+        let detail = '';
+        try { detail = (await res.json()).error ?? ''; } catch { /* ignore */ }
+        setError(`Failed to load stats (${res.status}${detail ? ': ' + detail : ''})`);
         return;
       }
       setStats(await res.json());
