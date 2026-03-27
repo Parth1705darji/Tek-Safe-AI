@@ -45,6 +45,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     });
   }
 
+  const thirtyDaysAgo = new Date(now.getTime() - 30 * 86400000).toISOString();
+
   const [
     totalUsers,
     usersToday,
@@ -56,6 +58,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     feedbackStats,
     recentUsers,
     kbDocuments,
+    tsMessages,
+    tsUsers,
   ] = await Promise.all([
     supabase.from('users').select('id', { count: 'exact', head: true }),
     supabase.from('users').select('id', { count: 'exact', head: true }).gte('created_at', startOfToday),
@@ -67,6 +71,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     supabase.from('messages').select('feedback').eq('role', 'assistant').not('feedback', 'is', null),
     supabase.from('users').select('id, clerk_id, email, display_name, tier, role, daily_message_count, created_at').order('created_at', { ascending: false }).limit(20),
     supabase.from('kb_documents').select('id, title, category, subcategory, tags, created_at').order('created_at', { ascending: false }),
+    supabase.from('messages').select('created_at').eq('role', 'assistant').gte('created_at', thirtyDaysAgo),
+    supabase.from('users').select('created_at').gte('created_at', thirtyDaysAgo),
   ]);
 
   const toolCounts: Record<string, number> = {};
@@ -77,6 +83,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const upCount = (feedbackStats.data ?? []).filter((m) => m.feedback === 'up').length;
   const downCount = (feedbackStats.data ?? []).filter((m) => m.feedback === 'down').length;
+
+  // Build 30-day time series
+  const groupByDay = (items: { created_at: string }[]) => {
+    const counts: Record<string, number> = {};
+    for (const item of items) {
+      const day = item.created_at.slice(0, 10);
+      counts[day] = (counts[day] ?? 0) + 1;
+    }
+    const result: { date: string; count: number }[] = [];
+    for (let i = 29; i >= 0; i--) {
+      const d = new Date(now.getTime() - i * 86400000);
+      const day = d.toISOString().slice(0, 10);
+      result.push({ date: day, count: counts[day] ?? 0 });
+    }
+    return result;
+  };
 
   return res.status(200).json({
     users: {
@@ -93,5 +115,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     feedback: { up: upCount, down: downCount },
     recentUsers: recentUsers.data ?? [],
     kbDocuments: kbDocuments.data ?? [],
+    timeSeries: {
+      messages: groupByDay(tsMessages.data ?? []),
+      users: groupByDay(tsUsers.data ?? []),
+    },
   });
 }
