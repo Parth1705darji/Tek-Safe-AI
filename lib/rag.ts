@@ -1,6 +1,6 @@
 /**
  * RAG pipeline — server-side only.
- * Lives under api/_lib/ so Vercel bundles it with the function correctly.
+ * Lives under lib/ so Vercel bundles it with the function correctly.
  */
 
 import { createChatCompletion } from './deepseek.js';

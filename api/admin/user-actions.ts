@@ -1,8 +1,8 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { createClient } from '@supabase/supabase-js';
 import { createClerkClient } from '@clerk/backend';
-import { verifyAdminRequest, sendAuthError } from '../_lib/adminAuth.js';
-import { writeAuditLog } from '../_lib/auditLog.js';
+import { verifyAdminRequest, sendAuthError } from '../../lib/adminAuth.js';
+import { writeAuditLog } from '../../lib/auditLog.js';
 
 export const config = { api: { bodyParser: true } };
 

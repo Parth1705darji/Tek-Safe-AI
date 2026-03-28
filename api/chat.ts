@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { createClient } from '@supabase/supabase-js';
-import { createStreamingCompletion } from './_lib/deepseek.js';
+import { createStreamingCompletion } from '../lib/deepseek.js';
 import {
   embedQuery,
   searchKnowledgeBase,
@@ -10,13 +10,13 @@ import {
   cleanResponseWithDiagnose,
   generateTitle,
   type KBChunk,
-} from './_lib/rag.js';
+} from '../lib/rag.js';
 import {
   containsPII,
   classifyInput,
   scanOutputForPII,
   isJailbreakResponse,
-} from './_lib/guardrails.js';
+} from '../lib/guardrails.js';
 
 // Body parser enabled (default for Vercel Node functions)
 export const config = { api: { bodyParser: true } };

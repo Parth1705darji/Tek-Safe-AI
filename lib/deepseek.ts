@@ -1,6 +1,6 @@
 /**
  * DeepSeek API client — server-side only.
- * Lives under api/_lib/ so Vercel bundles it with the function correctly.
+ * Lives under lib/ so Vercel bundles it with the function correctly.
  */
 
 const BASE_URL = 'https://api.deepseek.com/v1';
