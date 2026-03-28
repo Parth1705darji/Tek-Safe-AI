@@ -125,7 +125,7 @@ const AdminLayout = ({ children }: AdminLayoutProps) => {
           </div>
         </header>
 
-        <main className="flex-1 overflow-y-auto bg-gray-950 p-6">
+        <main className="flex-1 overflow-y-auto bg-gray-950 p-6 flex flex-col">
           {children}
         </main>
       </div>
