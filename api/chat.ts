@@ -118,8 +118,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.end();
     }
 
-    // 2. Check rate limit
-    const LIMITS: Record<string, number> = { free: 20, pro: 500, premium: Infinity };
+    // 2. Check rate limit (fetch from DB settings, fallback to hardcoded)
+    let LIMITS: Record<string, number> = { free: 20, pro: 500, premium: Infinity };
+    try {
+      const { data: settingRow } = await supabaseAdmin
+        .from('app_settings').select('value').eq('key', 'tier_limits').single();
+      if (settingRow?.value && typeof settingRow.value === 'object') {
+        const dbLimits = settingRow.value as Record<string, number>;
+        LIMITS = { ...LIMITS, ...Object.fromEntries(
+          Object.entries(dbLimits).map(([k, v]) => [k, v === -1 ? Infinity : v])
+        )};
+      }
+    } catch { /* non-fatal — table may not exist yet */ }
     const limit = LIMITS[user.tier] ?? 50;
     const now = new Date();
     const resetAt = user.daily_message_reset_at ? new Date(user.daily_message_reset_at) : null;
@@ -134,6 +144,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (containsPII(message.trim())) {
       const aiMsg = "Please don't share sensitive information like passwords, OTPs, or Aadhaar numbers for your own security.";
       const msgId = await saveBlocked('[Message blocked: contains sensitive information]', `⚠️ ${aiMsg}`);
+      supabaseAdmin.from('analytics_events').insert({ user_id: user.id, event_type: 'guardrail_block', event_data: { type: 'pii', conversation_id: conversationId } }).catch(() => {});
       send({ type: 'error', message: aiMsg });
       send({ type: 'done', messageId: msgId });
       return res.end();
@@ -143,6 +154,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (classification === 'off_topic') {
       const aiMsg = "I specialise in tech support and cybersecurity. I can't help with that, but feel free to ask about device issues, security threats, or online safety!";
       const msgId = await saveBlocked(message.trim(), `ℹ️ ${aiMsg}`);
+      supabaseAdmin.from('analytics_events').insert({ user_id: user.id, event_type: 'guardrail_block', event_data: { type: 'off_topic', conversation_id: conversationId } }).catch(() => {});
       send({ type: 'info', message: aiMsg });
       send({ type: 'done', messageId: msgId });
       return res.end();
@@ -150,6 +162,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (classification === 'unsafe') {
       const aiMsg = "I can't help with that request.";
       const msgId = await saveBlocked('[Message blocked: content policy violation]', `⚠️ ${aiMsg}`);
+      supabaseAdmin.from('analytics_events').insert({ user_id: user.id, event_type: 'guardrail_block', event_data: { type: 'unsafe', conversation_id: conversationId } }).catch(() => {});
       send({ type: 'error', message: aiMsg });
       send({ type: 'done', messageId: msgId });
       return res.end();

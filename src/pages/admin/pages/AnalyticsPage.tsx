@@ -1,5 +1,5 @@
 import { useAdminStats } from '../../../hooks/useAdminStats';
-import { BarChart3, TrendingUp, RefreshCw, Users } from 'lucide-react';
+import { BarChart3, TrendingUp, RefreshCw, Users, ShieldAlert, Zap } from 'lucide-react';
 import { LoadingSkeleton } from '../components/LoadingSkeleton';
 import { StatCard } from '../components/StatCard';
 import MiniLineChart from '../components/MiniLineChart';
@@ -20,6 +20,9 @@ const AnalyticsPage = () => {
 
   const toolEntries = Object.entries(stats?.tools ?? {});
   const totalTools = toolEntries.reduce((a, [, v]) => a + v, 0);
+  const skillEntries = Object.entries(stats?.skillUsage ?? {}).sort((a, b) => b[1] - a[1]);
+  const totalSkillUses = skillEntries.reduce((a, [, v]) => a + v, 0);
+  const guardrail = stats?.guardrail ?? { pii: 0, off_topic: 0, unsafe: 0, total: 0 };
   const feedbackTotal = (stats?.feedback.up ?? 0) + (stats?.feedback.down ?? 0);
 
   const msgSeries = stats?.timeSeries?.messages ?? [];
@@ -171,6 +174,80 @@ const AnalyticsPage = () => {
                 />
               </div>
             </div>
+          </div>
+        )}
+      </div>
+
+      {/* Guardrail Events */}
+      <div className="rounded-2xl border border-gray-800 bg-gray-900 p-5">
+        <div className="mb-4 flex items-center gap-2">
+          <ShieldAlert className="h-4 w-4 text-orange-400" />
+          <h2 className="font-semibold text-white">Guardrail Blocks</h2>
+          {!loading && guardrail.total > 0 && (
+            <span className="ml-auto text-sm font-semibold text-orange-400">{guardrail.total} total</span>
+          )}
+        </div>
+        {loading ? (
+          <div className="space-y-3">
+            {[1, 2, 3].map(i => <div key={i} className="h-8 animate-pulse rounded bg-gray-800" />)}
+          </div>
+        ) : guardrail.total === 0 ? (
+          <p className="text-sm text-gray-500">No guardrail blocks recorded yet</p>
+        ) : (
+          <div className="space-y-3">
+            {[
+              { key: 'pii', label: 'PII Detected', count: guardrail.pii, color: 'bg-red-500' },
+              { key: 'off_topic', label: 'Off-Topic', count: guardrail.off_topic, color: 'bg-yellow-500' },
+              { key: 'unsafe', label: 'Unsafe Content', count: guardrail.unsafe, color: 'bg-orange-500' },
+            ].map(({ key, label, count, color }) => {
+              const pct = guardrail.total > 0 ? Math.round((count / guardrail.total) * 100) : 0;
+              return (
+                <div key={key}>
+                  <div className="mb-1 flex items-center justify-between text-sm">
+                    <span className="text-gray-300">{label}</span>
+                    <span className="text-gray-400">{count} ({pct}%)</span>
+                  </div>
+                  <div className="h-2 w-full overflow-hidden rounded-full bg-gray-800">
+                    <div className={`h-full rounded-full ${color} transition-all duration-500`} style={{ width: `${pct}%` }} />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* Skill Usage */}
+      <div className="rounded-2xl border border-gray-800 bg-gray-900 p-5">
+        <div className="mb-4 flex items-center gap-2">
+          <Zap className="h-4 w-4 text-[#00D4AA]" />
+          <h2 className="font-semibold text-white">Skill Usage</h2>
+          {!loading && totalSkillUses > 0 && (
+            <span className="ml-auto text-sm font-semibold text-[#00D4AA]">{totalSkillUses} activations</span>
+          )}
+        </div>
+        {loading ? (
+          <div className="space-y-3">
+            {[1, 2, 3].map(i => <div key={i} className="h-8 animate-pulse rounded bg-gray-800" />)}
+          </div>
+        ) : skillEntries.length === 0 ? (
+          <p className="text-sm text-gray-500">No skill usage data yet</p>
+        ) : (
+          <div className="space-y-3">
+            {skillEntries.map(([slug, count]) => {
+              const pct = totalSkillUses > 0 ? Math.round((count / totalSkillUses) * 100) : 0;
+              return (
+                <div key={slug}>
+                  <div className="mb-1 flex items-center justify-between text-sm">
+                    <span className="text-gray-300 capitalize">{slug.replace(/_/g, ' ')}</span>
+                    <span className="text-gray-400">{count} ({pct}%)</span>
+                  </div>
+                  <div className="h-2 w-full overflow-hidden rounded-full bg-gray-800">
+                    <div className="h-full rounded-full bg-[#00D4AA] transition-all duration-500" style={{ width: `${pct}%` }} />
+                  </div>
+                </div>
+              );
+            })}
           </div>
         )}
       </div>

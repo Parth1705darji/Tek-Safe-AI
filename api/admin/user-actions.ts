@@ -3,6 +3,7 @@ import { createClient } from '@supabase/supabase-js';
 import { createClerkClient } from '@clerk/backend';
 import { verifyAdminRequest, sendAuthError } from '../../lib/adminAuth.js';
 import { writeAuditLog } from '../../lib/auditLog.js';
+import { sendEmail, suspensionEmailHtml } from '../../lib/email.js';
 
 export const config = { api: { bodyParser: true } };
 
@@ -90,6 +91,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   // ── suspend ────────────────────────────────────────────────────────────────
   if (action === 'suspend') {
+    // Fetch email before update for notification
+    const { data: targetUser } = await supabase
+      .from('users').select('email, display_name').eq('clerk_id', clerkId).single();
+
     const { error } = await supabase
       .from('users')
       .update({
@@ -105,6 +110,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       action: 'suspend_user', targetType: 'user', targetId: clerkId,
       payload: { reason: body.reason ?? null }, ipAddress: ip,
     });
+
+    // Send suspension notification email (non-fatal)
+    if (targetUser?.email) {
+      sendEmail({
+        to: targetUser.email,
+        subject: 'Your Tek-Safe AI account has been suspended',
+        html: suspensionEmailHtml(targetUser.display_name ?? '', body.reason),
+      }).catch(() => {});
+    }
 
     return res.status(200).json({ ok: true });
   }

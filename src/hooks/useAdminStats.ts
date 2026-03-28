@@ -6,6 +6,8 @@ export interface AdminStats {
   messages: { total: number; today: number; thisWeek: number };
   tools: Record<string, number>;
   feedback: { up: number; down: number };
+  guardrail: { pii: number; off_topic: number; unsafe: number; total: number };
+  skillUsage: Record<string, number>;
   recentUsers: Array<{
     id: string;
     clerk_id: string;
@@ -22,6 +24,8 @@ export interface AdminStats {
     category: string;
     subcategory: string;
     tags: string[];
+    source_url: string | null;
+    embedded: boolean;
     created_at: string;
   }>;
   timeSeries?: {

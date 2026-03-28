@@ -9,6 +9,7 @@ import SystemHealth from './pages/SystemHealth';
 import AuditLog from './pages/AuditLog';
 import BroadcastPage from './pages/BroadcastPage';
 import SkillsManager from './pages/SkillsManager';
+import SettingsPage from './pages/SettingsPage';
 
 const AdminPortal = () => {
   return (
@@ -20,6 +21,7 @@ const AdminPortal = () => {
         <Route path="conversations" element={<ConversationBrowser />} />
         <Route path="analytics" element={<AnalyticsPage />} />
         <Route path="skills" element={<SkillsManager />} />
+        <Route path="settings" element={<SettingsPage />} />
         <Route path="broadcast" element={<BroadcastPage />} />
         <Route path="audit-log" element={<AuditLog />} />
         <Route path="system" element={<SystemHealth />} />

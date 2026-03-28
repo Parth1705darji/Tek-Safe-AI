@@ -60,6 +60,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       subcategory?: string;
       tags?: string[];
       content?: string;
+      source_url?: string;
     };
 
     if (!body.title || !body.content || !body.category || !body.subcategory) {
@@ -75,6 +76,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           subcategory: body.subcategory.trim(),
           content: body.content.trim(),
           tags: body.tags ?? [],
+          source_url: body.source_url?.trim() || null,
         },
         { onConflict: 'title' }
       )

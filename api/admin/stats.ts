@@ -22,7 +22,34 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
   const startOfWeek = new Date(now.getTime() - 7 * 86400000).toISOString();
 
-  // ?include=db returns database table row counts (merged from db-stats endpoint)
+  // ?include=env returns server-side env var status (replaces deleted /api/ping)
+  if (req.query.include === 'env') {
+    const recentErrors = await supabase
+      .from('analytics_events')
+      .select('event_type, event_data, created_at')
+      .eq('event_type', 'guardrail_block')
+      .order('created_at', { ascending: false })
+      .limit(20);
+
+    return res.status(200).json({
+      env: {
+        hasSupabaseUrl: !!process.env.VITE_SUPABASE_URL,
+        hasServiceRole: !!process.env.SUPABASE_SERVICE_ROLE_KEY,
+        hasDeepSeek: !!process.env.DEEPSEEK_API_KEY,
+        hasOpenAI: !!(process.env.OPENAI_API_KEY && process.env.OPENAI_API_KEY !== 'your_key_here'),
+        hasHIBP: !!(process.env.HIBP_API_KEY && process.env.HIBP_API_KEY !== 'your_key_here'),
+        hasVirusTotal: !!(process.env.VIRUSTOTAL_API_KEY && process.env.VIRUSTOTAL_API_KEY !== 'your_key_here'),
+        hasAbuseIPDB: !!(process.env.ABUSEIPDB_API_KEY && process.env.ABUSEIPDB_API_KEY !== 'your_key_here'),
+        hasChatwoot: !!(process.env.VITE_CHATWOOT_WEBSITE_TOKEN && process.env.VITE_CHATWOOT_WEBSITE_TOKEN !== 'your_token_here'),
+        hasAdminEmail: !!process.env.VITE_ADMIN_EMAIL,
+        hasClerkSecret: !!process.env.CLERK_SECRET_KEY,
+        hasResend: !!process.env.RESEND_API_KEY,
+      },
+      recentErrors: recentErrors.data ?? [],
+    });
+  }
+
+  // ?include=db returns database table row counts
   if (req.query.include === 'db') {
     const [users, conversations, messages, kbDocs, kbEmbeddings, analytics] =
       await Promise.all([
@@ -65,6 +92,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     suspendedUsers,
     activeConvs24h,
     activeConvs7d,
+    guardrailEvents,
+    skillUsageEvents,
+    kbEmbeddings,
   ] = await Promise.all([
     supabase.from('users').select('id', { count: 'exact', head: true }),
     supabase.from('users').select('id', { count: 'exact', head: true }).gte('created_at', startOfToday),
@@ -75,12 +105,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     supabase.from('analytics_events').select('event_data').eq('event_type', 'tool_used'),
     supabase.from('messages').select('feedback').eq('role', 'assistant').not('feedback', 'is', null),
     supabase.from('users').select('id, clerk_id, email, display_name, tier, role, daily_message_count, created_at').order('created_at', { ascending: false }).limit(20),
-    supabase.from('kb_documents').select('id, title, category, subcategory, tags, created_at').order('created_at', { ascending: false }),
+    supabase.from('kb_documents').select('id, title, category, subcategory, tags, source_url, created_at').order('created_at', { ascending: false }),
     supabase.from('messages').select('created_at').eq('role', 'assistant').gte('created_at', thirtyDaysAgo),
     supabase.from('users').select('created_at').gte('created_at', thirtyDaysAgo),
     supabase.from('users').select('id', { count: 'exact', head: true }).eq('is_suspended', true),
     supabase.from('conversations').select('user_id').gte('updated_at', last24h),
     supabase.from('conversations').select('user_id').gte('updated_at', startOfWeek),
+    supabase.from('analytics_events').select('event_data').eq('event_type', 'guardrail_block'),
+    supabase.from('analytics_events').select('event_data').eq('event_type', 'message_sent').not('event_data->tools_active', 'eq', '[]'),
+    supabase.from('kb_embeddings').select('document_id'),
   ]);
 
   const toolCounts: Record<string, number> = {};
@@ -111,6 +144,34 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const activeUsers24h = new Set((activeConvs24h.data ?? []).map(c => c.user_id)).size;
   const activeUsers7d = new Set((activeConvs7d.data ?? []).map(c => c.user_id)).size;
 
+  // Guardrail breakdown
+  const guardrailCounts = { pii: 0, off_topic: 0, unsafe: 0, total: 0 };
+  for (const e of (guardrailEvents.data ?? [])) {
+    const t = (e.event_data as Record<string, string>)?.type;
+    guardrailCounts.total++;
+    if (t === 'pii') guardrailCounts.pii++;
+    else if (t === 'off_topic') guardrailCounts.off_topic++;
+    else if (t === 'unsafe') guardrailCounts.unsafe++;
+  }
+
+  // Skill usage breakdown (from tools_active arrays in message_sent events)
+  const skillCounts: Record<string, number> = {};
+  for (const e of (skillUsageEvents.data ?? [])) {
+    const tools = (e.event_data as Record<string, unknown>)?.tools_active;
+    if (Array.isArray(tools)) {
+      for (const slug of tools as string[]) {
+        skillCounts[slug] = (skillCounts[slug] ?? 0) + 1;
+      }
+    }
+  }
+
+  // Embedding status per KB doc
+  const embeddedDocIds = new Set((kbEmbeddings.data ?? []).map((e: { document_id: string }) => e.document_id));
+  const kbDocsWithStatus = (kbDocuments.data ?? []).map((d: Record<string, unknown>) => ({
+    ...d,
+    embedded: embeddedDocIds.has(d.id as string),
+  }));
+
   return res.status(200).json({
     users: {
       total: totalUsers.count ?? 0,
@@ -127,8 +188,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     },
     tools: toolCounts,
     feedback: { up: upCount, down: downCount },
+    guardrail: guardrailCounts,
+    skillUsage: skillCounts,
     recentUsers: recentUsers.data ?? [],
-    kbDocuments: kbDocuments.data ?? [],
+    kbDocuments: kbDocsWithStatus,
     timeSeries: {
       messages: groupByDay(tsMessages.data ?? []),
       users: groupByDay(tsUsers.data ?? []),

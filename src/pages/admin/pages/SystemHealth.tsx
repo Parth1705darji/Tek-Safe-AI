@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useAdminToken } from '../../../hooks/useAdminToken';
-import { CheckCircle2, XCircle, RefreshCw, Database, Key, Server } from 'lucide-react';
+import { CheckCircle2, XCircle, RefreshCw, Database, Key, Server, ShieldAlert } from 'lucide-react';
 
 interface EnvStatus {
   hasSupabaseUrl: boolean;
@@ -10,10 +10,16 @@ interface EnvStatus {
   hasHIBP: boolean;
   hasVirusTotal: boolean;
   hasAbuseIPDB: boolean;
-  hasRazorpay: boolean;
   hasChatwoot: boolean;
   hasAdminEmail: boolean;
   hasClerkSecret: boolean;
+  hasResend: boolean;
+}
+
+interface RecentError {
+  event_type: string;
+  event_data: Record<string, string>;
+  created_at: string;
 }
 
 interface DBStats {
@@ -27,39 +33,50 @@ interface DBStats {
   };
 }
 
-const StatusRow = ({ label, ok }: { label: string; ok: boolean }) => (
+const StatusRow = ({ label, ok, optional }: { label: string; ok: boolean; optional?: boolean }) => (
   <div className="flex items-center justify-between py-2.5 border-b border-gray-800 last:border-0">
-    <span className="text-sm text-gray-300">{label}</span>
+    <div>
+      <span className="text-sm text-gray-300">{label}</span>
+      {optional && <span className="ml-1.5 text-xs text-gray-600">(optional)</span>}
+    </div>
     {ok ? (
       <span className="flex items-center gap-1.5 text-xs font-medium text-green-400">
         <CheckCircle2 className="h-4 w-4" /> Configured
       </span>
     ) : (
-      <span className="flex items-center gap-1.5 text-xs font-medium text-red-400">
+      <span className={`flex items-center gap-1.5 text-xs font-medium ${optional ? 'text-gray-500' : 'text-red-400'}`}>
         <XCircle className="h-4 w-4" /> Missing
       </span>
     )}
   </div>
 );
 
+const GUARDRAIL_LABELS: Record<string, string> = {
+  pii: 'PII Detected',
+  off_topic: 'Off-Topic',
+  unsafe: 'Unsafe Content',
+};
+
 const SystemHealth = () => {
   const adminFetch = useAdminToken();
 
   const [env, setEnv] = useState<EnvStatus | null>(null);
+  const [recentErrors, setRecentErrors] = useState<RecentError[]>([]);
   const [dbStats, setDbStats] = useState<DBStats | null>(null);
   const [loading, setLoading] = useState(true);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-      const [pingRes, dbRes] = await Promise.all([
-        fetch('/api/ping'),
+      const [envRes, dbRes] = await Promise.all([
+        adminFetch('/api/admin/stats?include=env'),
         adminFetch('/api/admin/stats?include=db'),
       ]);
 
-      if (pingRes.ok) {
-        const data = await pingRes.json();
+      if (envRes.ok) {
+        const data = await envRes.json();
         setEnv(data.env ?? null);
+        setRecentErrors(data.recentErrors ?? []);
       }
       if (dbRes.ok) {
         setDbStats(await dbRes.json());
@@ -72,7 +89,7 @@ const SystemHealth = () => {
   useEffect(() => { fetchData(); }, [fetchData]);
 
   const allOk = env
-    ? env.hasSupabaseUrl && env.hasServiceRole && env.hasDeepSeek && env.hasAdminEmail
+    ? env.hasSupabaseUrl && env.hasServiceRole && env.hasDeepSeek && env.hasAdminEmail && env.hasClerkSecret
     : false;
 
   return (
@@ -80,7 +97,7 @@ const SystemHealth = () => {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-xl font-bold text-white">System Health</h1>
-          <p className="text-sm text-gray-400">API keys, database, and infrastructure status</p>
+          <p className="text-sm text-gray-400">API keys, database, and guardrail activity</p>
         </div>
         <button
           onClick={fetchData}
@@ -108,12 +125,12 @@ const SystemHealth = () => {
             <p className={`text-sm font-medium ${
               loading ? 'text-gray-300' : allOk ? 'text-green-400' : 'text-yellow-400'
             }`}>
-              {loading ? 'Checking system status...'
-               : allOk ? 'All Systems Operational'
-               : 'Some keys are missing'}
+              {loading ? 'Checking system status…'
+               : allOk ? 'All Core Systems Operational'
+               : 'Some required keys are missing'}
             </p>
             {!loading && !allOk && (
-              <p className="text-xs text-gray-400">Check the list below for missing configuration</p>
+              <p className="text-xs text-gray-400">Check the API Keys section below</p>
             )}
           </div>
         </div>
@@ -128,23 +145,23 @@ const SystemHealth = () => {
           </div>
           {loading ? (
             <div className="space-y-3">
-              {[1, 2, 3, 4, 5].map(i => <div key={i} className="h-8 animate-pulse rounded bg-gray-800" />)}
+              {[1, 2, 3, 4, 5].map(i => <div key={i} className="h-9 animate-pulse rounded bg-gray-800" />)}
             </div>
           ) : !env ? (
-            <p className="text-sm text-gray-500">Could not load env status. Check /api/ping endpoint.</p>
+            <p className="text-sm text-gray-500">Could not load env status.</p>
           ) : (
             <>
               <StatusRow label="Supabase URL" ok={env.hasSupabaseUrl} />
               <StatusRow label="Supabase Service Role" ok={env.hasServiceRole} />
               <StatusRow label="DeepSeek API" ok={env.hasDeepSeek} />
-              <StatusRow label="OpenAI API (Embeddings)" ok={env.hasOpenAI} />
-              <StatusRow label="HaveIBeenPwned API" ok={env.hasHIBP} />
-              <StatusRow label="VirusTotal API" ok={env.hasVirusTotal} />
-              <StatusRow label="AbuseIPDB API" ok={env.hasAbuseIPDB} />
-              <StatusRow label="Razorpay" ok={env.hasRazorpay} />
-              <StatusRow label="Chatwoot" ok={env.hasChatwoot} />
-              <StatusRow label="Admin Email" ok={env.hasAdminEmail} />
               <StatusRow label="Clerk Secret Key" ok={env.hasClerkSecret} />
+              <StatusRow label="Admin Email" ok={env.hasAdminEmail} />
+              <StatusRow label="OpenAI API (Embeddings)" ok={env.hasOpenAI} optional />
+              <StatusRow label="HaveIBeenPwned API" ok={env.hasHIBP} optional />
+              <StatusRow label="VirusTotal API" ok={env.hasVirusTotal} optional />
+              <StatusRow label="AbuseIPDB API" ok={env.hasAbuseIPDB} optional />
+              <StatusRow label="Chatwoot" ok={env.hasChatwoot} optional />
+              <StatusRow label="Resend (Email)" ok={env.hasResend} optional />
             </>
           )}
         </div>
@@ -172,17 +189,72 @@ const SystemHealth = () => {
         </div>
       </div>
 
-      {/* Runtime Logs Placeholder */}
-      <div className="rounded-2xl border border-gray-700/50 bg-gray-900/50 p-5">
-        <div className="mb-2 flex items-center gap-2">
-          <Server className="h-4 w-4 text-gray-600" />
-          <h2 className="font-semibold text-gray-400">Runtime Logs</h2>
+      {/* Recent Guardrail Events */}
+      <div className="rounded-2xl border border-gray-800 bg-gray-900 p-5">
+        <div className="mb-4 flex items-center gap-2">
+          <ShieldAlert className="h-4 w-4 text-[#00D4AA]" />
+          <h2 className="font-semibold text-white">Recent Guardrail Blocks</h2>
+          <span className="ml-auto text-xs text-gray-500">Last 20 events</span>
         </div>
-        <p className="text-sm text-gray-500">
-          Error logging coming soon. For now, check{' '}
-          <span className="font-mono text-gray-400">Vercel Dashboard → Functions → Logs</span>{' '}
-          for runtime errors.
-        </p>
+
+        {loading ? (
+          <div className="space-y-2">
+            {[1, 2, 3].map(i => <div key={i} className="h-8 animate-pulse rounded bg-gray-800" />)}
+          </div>
+        ) : recentErrors.length === 0 ? (
+          <div className="flex items-center gap-2 text-sm text-gray-500">
+            <CheckCircle2 className="h-4 w-4 text-green-500" />
+            No guardrail blocks recorded yet
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-gray-800 text-left">
+                  <th className="pb-2 text-xs font-medium uppercase tracking-wide text-gray-500">Type</th>
+                  <th className="pb-2 text-xs font-medium uppercase tracking-wide text-gray-500">Details</th>
+                  <th className="pb-2 text-xs font-medium uppercase tracking-wide text-gray-500 text-right">Time (IST)</th>
+                </tr>
+              </thead>
+              <tbody>
+                {recentErrors.map((e, i) => {
+                  const blockType = e.event_data?.type ?? 'unknown';
+                  const ist = new Date(e.created_at).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
+                  return (
+                    <tr key={i} className="border-b border-gray-800/50 last:border-0">
+                      <td className="py-2 pr-4">
+                        <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${
+                          blockType === 'pii' ? 'bg-red-500/20 text-red-400'
+                          : blockType === 'off_topic' ? 'bg-yellow-500/20 text-yellow-400'
+                          : 'bg-orange-500/20 text-orange-400'
+                        }`}>
+                          {GUARDRAIL_LABELS[blockType] ?? blockType}
+                        </span>
+                      </td>
+                      <td className="py-2 pr-4 text-gray-400 text-xs font-mono">
+                        {e.event_data?.conversation_id
+                          ? `conv: ${String(e.event_data.conversation_id).slice(0, 8)}…`
+                          : '—'}
+                      </td>
+                      <td className="py-2 text-right text-xs text-gray-500">{ist}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      {/* Runtime note */}
+      <div className="rounded-2xl border border-gray-700/50 bg-gray-900/50 p-4">
+        <div className="flex items-center gap-2">
+          <Server className="h-4 w-4 text-gray-600" />
+          <p className="text-sm text-gray-500">
+            For serverless function logs, check{' '}
+            <span className="font-mono text-gray-400">Vercel Dashboard → Functions → Logs</span>
+          </p>
+        </div>
       </div>
     </div>
   );
