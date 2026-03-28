@@ -11,20 +11,26 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     process.env.SUPABASE_SERVICE_ROLE_KEY!
   );
 
-  // ── broadcast GET is public — users need to read active announcements ───────
+  // ── broadcast GET: public if no auth header, admin view if authenticated ─────
   if (resource === 'broadcast' && req.method === 'GET') {
-    const { data, error } = await supabase
-      .from('announcements')
-      .select('id, message, created_at, expires_at')
-      .eq('is_active', true)
-      .or(`expires_at.is.null,expires_at.gt.${new Date().toISOString()}`)
-      .order('created_at', { ascending: false });
+    const isAdminRequest = (req.headers.authorization as string | undefined)?.startsWith('Bearer ');
 
-    if (error) {
-      if (error.code === '42P01') return res.status(200).json({ announcements: [] });
-      return res.status(500).json({ error: error.message });
+    if (!isAdminRequest) {
+      // Public: return only active, non-expired announcements for the chat banner
+      const { data, error } = await supabase
+        .from('announcements')
+        .select('id, message, created_at, expires_at, is_active')
+        .eq('is_active', true)
+        .or(`expires_at.is.null,expires_at.gt.${new Date().toISOString()}`)
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        if (error.code === '42P01') return res.status(200).json({ announcements: [] });
+        return res.status(500).json({ error: error.message });
+      }
+      return res.status(200).json({ announcements: data ?? [] });
     }
-    return res.status(200).json({ announcements: data ?? [] });
+    // Authenticated request falls through to the admin handler below
   }
 
   // All other routes require admin auth
