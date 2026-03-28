@@ -1,7 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { createClient } from '@supabase/supabase-js';
-import { verifyAdminRequest, sendAuthError } from '../_lib/adminAuth.js';
-import { writeAuditLog } from '../_lib/auditLog.js';
+import { verifyAdminRequest, sendAuthError } from '../../lib/adminAuth.js';
+import { writeAuditLog } from '../../lib/auditLog.js';
 
 export const config = { api: { bodyParser: true } };
 
@@ -60,6 +60,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       subcategory?: string;
       tags?: string[];
       content?: string;
+      source_url?: string;
     };
 
     if (!body.title || !body.content || !body.category || !body.subcategory) {
@@ -75,6 +76,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           subcategory: body.subcategory.trim(),
           content: body.content.trim(),
           tags: body.tags ?? [],
+          source_url: body.source_url?.trim() || null,
         },
         { onConflict: 'title' }
       )

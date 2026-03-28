@@ -1,6 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { Webhook } from 'svix';
 import { createClient } from '@supabase/supabase-js';
+import { sendEmail, welcomeEmailHtml } from '../../lib/email.js';
 
 // Disable body parsing so we can read the raw body for svix signature verification
 export const config = {
@@ -124,6 +125,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             .eq('clerk_id', id);
         } catch (e) {
           console.warn('Failed to set role metadata (non-fatal):', (e as Error).message);
+        }
+
+        // Send welcome email (non-fatal)
+        if (primaryEmail) {
+          sendEmail({
+            to: primaryEmail,
+            subject: 'Welcome to Tek-Safe AI 🛡️',
+            html: welcomeEmailHtml(displayName ?? ''),
+          }).catch(() => {});
         }
         break;
       }

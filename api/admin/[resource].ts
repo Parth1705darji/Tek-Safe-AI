@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { createClient } from '@supabase/supabase-js';
-import { verifyAdminRequest, sendAuthError } from '../_lib/adminAuth.js';
+import { verifyAdminRequest, sendAuthError } from '../../lib/adminAuth.js';
 
 export const config = { api: { bodyParser: true } };
 
@@ -267,6 +267,45 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         admin_email: admin.email,
         action: 'skill_deleted',
         payload: { skill_id: id },
+      }).catch(() => {});
+
+      return res.status(200).json({ ok: true });
+    }
+
+    return res.status(405).end();
+  }
+
+  // ── settings: GET all | PUT upsert key-value ─────────────────────────────
+  if (resource === 'settings') {
+    if (req.method === 'GET') {
+      const { data, error } = await supabase.from('app_settings').select('*').order('key');
+      if (error) {
+        if (error.code === '42P01') return res.status(200).json({ settings: [] });
+        return res.status(500).json({ error: error.message });
+      }
+      return res.status(200).json({ settings: data ?? [] });
+    }
+
+    if (req.method === 'PUT') {
+      const { key, value, description } = req.body as { key?: string; value?: unknown; description?: string };
+      if (!key) return res.status(400).json({ error: 'key is required' });
+
+      const { error } = await supabase.from('app_settings').upsert({
+        key,
+        value,
+        description: description ?? null,
+        updated_at: new Date().toISOString(),
+      }, { onConflict: 'key' });
+
+      if (error) {
+        if (error.code === '42P01') return res.status(503).json({ error: 'Run SQL migration to create app_settings table.' });
+        return res.status(500).json({ error: error.message });
+      }
+
+      await supabase.from('admin_audit_log').insert({
+        admin_email: admin.email,
+        action: 'setting_updated',
+        payload: { key, value },
       }).catch(() => {});
 
       return res.status(200).json({ ok: true });

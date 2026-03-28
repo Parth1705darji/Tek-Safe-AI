@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, Fragment } from 'react';
 import { useAdminToken } from '../../../hooks/useAdminToken';
-import { Plus, Edit2, Trash2, Search, X, Tag } from 'lucide-react';
+import { Plus, Edit2, Trash2, Search, X, Tag, Link, CheckCircle2, Clock } from 'lucide-react';
 import { showToast } from '../../../components/common/Toast';
 import { ConfirmModal } from '../components/ConfirmModal';
 import { LoadingSkeleton } from '../components/LoadingSkeleton';
@@ -12,6 +12,8 @@ interface KBArticle {
   subcategory: string;
   tags: string[];
   content?: string;
+  source_url?: string | null;
+  embedded?: boolean;
   created_at: string;
 }
 
@@ -33,6 +35,7 @@ const KBManager = () => {
     subcategory: '',
     tags: [] as string[],
     content: '',
+    source_url: '',
   });
   const [tagInput, setTagInput] = useState('');
   const [saving, setSaving] = useState(false);
@@ -65,7 +68,7 @@ const KBManager = () => {
 
   const openAdd = () => {
     setEditingArticle(null);
-    setFormData({ title: '', category: 'cybersecurity', subcategory: '', tags: [], content: '' });
+    setFormData({ title: '', category: 'cybersecurity', subcategory: '', tags: [], content: '', source_url: '' });
     setTagInput('');
     setFormOpen(true);
   };
@@ -78,6 +81,7 @@ const KBManager = () => {
       subcategory: article.subcategory,
       tags: article.tags ?? [],
       content: article.content ?? '',
+      source_url: article.source_url ?? '',
     });
     setTagInput('');
     setFormOpen(true);
@@ -251,6 +255,17 @@ const KBManager = () => {
             </div>
 
             <div>
+              <label className="mb-1 block text-xs font-medium text-gray-400">Source URL (optional)</label>
+              <input
+                value={formData.source_url}
+                onChange={e => setFormData(f => ({ ...f, source_url: e.target.value }))}
+                placeholder="https://example.com/reference"
+                type="url"
+                className="w-full rounded-xl border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-white placeholder-gray-500 focus:border-[#00D4AA] focus:outline-none"
+              />
+            </div>
+
+            <div>
               <label className="mb-1 block text-xs font-medium text-gray-400">Content * (Markdown supported)</label>
               <textarea
                 value={formData.content}
@@ -311,7 +326,29 @@ const KBManager = () => {
                   <Fragment key={article.id}>
                     <tr className="border-b border-gray-800/50 hover:bg-gray-800/30">
                       <td className="px-5 py-3">
-                        <p className="max-w-[240px] truncate font-medium text-white">{article.title}</p>
+                        <p className="max-w-[220px] truncate font-medium text-white">{article.title}</p>
+                        <div className="mt-0.5 flex items-center gap-2">
+                          {article.embedded === true ? (
+                            <span className="flex items-center gap-1 text-xs text-green-500">
+                              <CheckCircle2 className="h-3 w-3" /> Embedded
+                            </span>
+                          ) : article.embedded === false ? (
+                            <span className="flex items-center gap-1 text-xs text-yellow-500">
+                              <Clock className="h-3 w-3" /> Not embedded
+                            </span>
+                          ) : null}
+                          {article.source_url && (
+                            <a
+                              href={article.source_url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="flex items-center gap-1 text-xs text-gray-500 hover:text-[#00D4AA] transition-colors"
+                              title={article.source_url}
+                            >
+                              <Link className="h-3 w-3" /> Source
+                            </a>
+                          )}
+                        </div>
                       </td>
                       <td className="px-5 py-3">
                         <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${

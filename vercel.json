@@ -40,7 +40,6 @@
   ],
   "functions": {
     "api/chat.ts": { "maxDuration": 30 },
-    "api/ping.ts": { "maxDuration": 10 },
     "api/conversations.ts": { "maxDuration": 10 },
     "api/feedback.ts": { "maxDuration": 10 },
     "api/tools/[tool].ts": { "maxDuration": 15 },
