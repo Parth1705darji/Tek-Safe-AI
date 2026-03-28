@@ -1,4 +1,5 @@
-import { useState, Fragment } from 'react';
+import { useState, Fragment, useRef, useEffect, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import {
   Search, ChevronLeft, ChevronRight, Download,
   ShieldOff, ShieldCheck, RefreshCw, Trash2, ChevronDown,
@@ -14,7 +15,14 @@ type ActionKey = 'role' | 'tier' | 'suspend' | 'unsuspend' | 'reset_quota' | 'de
 interface PendingAction {
   key: ActionKey;
   user: AdminUser;
-  extra?: string; // new tier value
+  extra?: string;
+}
+
+interface MenuState {
+  userId: string;
+  user: AdminUser;
+  top: number;
+  right: number;
 }
 
 const TIER_OPTIONS = ['free', 'pro', 'team', 'premium'] as const;
@@ -33,10 +41,33 @@ const UserManagement = () => {
 
   const [pending, setPending] = useState<PendingAction | null>(null);
   const [acting, setActing] = useState(false);
-  const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+  const [menu, setMenu] = useState<MenuState | null>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  // Close menu on outside click or scroll
+  useEffect(() => {
+    if (!menu) return;
+    const close = () => setMenu(null);
+    document.addEventListener('mousedown', close);
+    document.addEventListener('scroll', close, true);
+    return () => {
+      document.removeEventListener('mousedown', close);
+      document.removeEventListener('scroll', close, true);
+    };
+  }, [menu]);
+
+  const openMenu = (u: AdminUser, btn: HTMLButtonElement) => {
+    const rect = btn.getBoundingClientRect();
+    setMenu({
+      userId: u.id,
+      user: u,
+      top: rect.bottom + 4,
+      right: window.innerWidth - rect.right,
+    });
+  };
 
   // ── Role change ────────────────────────────────────────────────────────────
-  const handleRoleChange = async (u: AdminUser, newRole: 'user' | 'admin') => {
+  const handleRoleChange = useCallback(async (u: AdminUser, newRole: 'user' | 'admin') => {
     setActing(true);
     try {
       const res = await adminFetch('/api/admin/user-actions', {
@@ -56,10 +87,10 @@ const UserManagement = () => {
       setActing(false);
       setPending(null);
     }
-  };
+  }, [adminFetch, refetch]);
 
   // ── Generic user-actions endpoint ─────────────────────────────────────────
-  const callUserAction = async (action: string, clerkId: string, extra?: Record<string, string>) => {
+  const callUserAction = useCallback(async (action: string, clerkId: string, extra?: Record<string, string>) => {
     const res = await adminFetch('/api/admin/user-actions', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -69,7 +100,7 @@ const UserManagement = () => {
       const err = await res.json();
       throw new Error(err.error ?? 'Action failed');
     }
-  };
+  }, [adminFetch]);
 
   const handleConfirm = async () => {
     if (!pending) return;
@@ -79,7 +110,7 @@ const UserManagement = () => {
       if (key === 'role') {
         const newRole = u.role === 'admin' ? 'user' : 'admin';
         await handleRoleChange(u, newRole);
-        return; // handleRoleChange manages its own cleanup
+        return;
       }
       if (key === 'tier' && extra) {
         await callUserAction('set_tier', u.clerk_id, { tier: extra });
@@ -111,12 +142,8 @@ const UserManagement = () => {
     const users = data?.users ?? [];
     const header = ['Email', 'Name', 'Tier', 'Role', 'Messages', 'Suspended', 'Joined'];
     const rows = users.map(u => [
-      u.email,
-      u.display_name ?? '',
-      u.tier,
-      u.role,
-      u.daily_message_count,
-      u.is_suspended ? 'Yes' : 'No',
+      u.email, u.display_name ?? '', u.tier, u.role,
+      u.daily_message_count, u.is_suspended ? 'Yes' : 'No',
       new Date(u.created_at).toLocaleDateString('en-GB'),
     ]);
     const csv = [header, ...rows].map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\n');
@@ -129,10 +156,8 @@ const UserManagement = () => {
     URL.revokeObjectURL(url);
   };
 
-  const getInitials = (u: AdminUser) => {
-    if (u.display_name) return u.display_name[0].toUpperCase();
-    return u.email[0].toUpperCase();
-  };
+  const getInitials = (u: AdminUser) =>
+    u.display_name ? u.display_name[0].toUpperCase() : u.email[0].toUpperCase();
 
   const confirmMessage = (p: PendingAction): string => {
     const name = p.user.display_name ?? p.user.email;
@@ -146,8 +171,71 @@ const UserManagement = () => {
     }
   };
 
+  // Portal dropdown — renders outside overflow containers so it's never clipped
+  const ActionMenu = menu && createPortal(
+    <div
+      ref={menuRef}
+      style={{ position: 'fixed', top: menu.top, right: menu.right, zIndex: 9999 }}
+      className="w-48 rounded-xl border border-gray-700 bg-gray-900 py-1 shadow-2xl"
+      onMouseDown={e => e.stopPropagation()}
+    >
+      <button
+        onClick={() => { setPending({ key: 'role', user: menu.user }); setMenu(null); }}
+        className="flex w-full items-center gap-2 px-3 py-2 text-xs text-gray-300 hover:bg-gray-800 hover:text-white"
+      >
+        {menu.user.role === 'admin' ? 'Make User' : 'Make Admin'}
+      </button>
+
+      <div className="border-t border-gray-800 px-3 py-1 text-[10px] font-medium uppercase tracking-wider text-gray-600">
+        Set Tier
+      </div>
+      {TIER_OPTIONS.filter(t => t !== menu.user.tier).map(t => (
+        <button
+          key={t}
+          onClick={() => { setPending({ key: 'tier', user: menu.user, extra: t }); setMenu(null); }}
+          className="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-gray-300 hover:bg-gray-800 hover:text-white capitalize"
+        >
+          {t}
+        </button>
+      ))}
+
+      <div className="border-t border-gray-800 mt-1 pt-1">
+        {menu.user.is_suspended ? (
+          <button
+            onClick={() => { setPending({ key: 'unsuspend', user: menu.user }); setMenu(null); }}
+            className="flex w-full items-center gap-2 px-3 py-2 text-xs text-green-400 hover:bg-gray-800"
+          >
+            <ShieldCheck className="h-3.5 w-3.5" /> Unsuspend
+          </button>
+        ) : (
+          <button
+            onClick={() => { setPending({ key: 'suspend', user: menu.user }); setMenu(null); }}
+            className="flex w-full items-center gap-2 px-3 py-2 text-xs text-yellow-400 hover:bg-gray-800"
+          >
+            <ShieldOff className="h-3.5 w-3.5" /> Suspend
+          </button>
+        )}
+        <button
+          onClick={() => { setPending({ key: 'reset_quota', user: menu.user }); setMenu(null); }}
+          className="flex w-full items-center gap-2 px-3 py-2 text-xs text-gray-300 hover:bg-gray-800"
+        >
+          <RefreshCw className="h-3.5 w-3.5" /> Reset Quota
+        </button>
+        <button
+          onClick={() => { setPending({ key: 'delete', user: menu.user }); setMenu(null); }}
+          className="flex w-full items-center gap-2 px-3 py-2 text-xs text-red-400 hover:bg-red-500/10"
+        >
+          <Trash2 className="h-3.5 w-3.5" /> Delete User
+        </button>
+      </div>
+    </div>,
+    document.body
+  );
+
   return (
-    <div className="space-y-6" onClick={() => setOpenMenuId(null)}>
+    <div className="flex flex-col h-full space-y-5">
+      {ActionMenu}
+
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-xl font-bold text-white">User Management</h1>
@@ -194,14 +282,12 @@ const UserManagement = () => {
       </div>
 
       {error && (
-        <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-400">
-          {error}
-        </div>
+        <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-400">{error}</div>
       )}
 
       {/* Table */}
-      <div className="rounded-2xl border border-gray-800 bg-gray-900">
-        <div className="overflow-x-auto">
+      <div className="flex-1 rounded-2xl border border-gray-800 bg-gray-900 overflow-hidden flex flex-col">
+        <div className="overflow-x-auto flex-1">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-gray-800 text-left">
@@ -219,7 +305,7 @@ const UserManagement = () => {
                 <LoadingSkeleton variant="table-row" count={8} />
               ) : !data?.users.length ? (
                 <tr>
-                  <td colSpan={7} className="px-5 py-12 text-center text-gray-500">
+                  <td colSpan={7} className="px-5 py-16 text-center text-gray-500">
                     {search || tierFilter || roleFilter ? 'No users match your filters' : 'No users yet'}
                   </td>
                 </tr>
@@ -271,76 +357,15 @@ const UserManagement = () => {
                         {new Date(u.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
                       </td>
                       <td className="px-5 py-3">
-                        {/* Actions dropdown */}
-                        <div className="relative" onClick={e => e.stopPropagation()}>
-                          <button
-                            onClick={() => setOpenMenuId(openMenuId === u.id ? null : u.id)}
-                            className="flex items-center gap-1 rounded-lg border border-gray-700 px-2 py-1 text-xs text-gray-400 hover:border-[#00D4AA] hover:text-[#00D4AA] transition-colors"
-                          >
-                            Actions <ChevronDown className="h-3 w-3" />
-                          </button>
-
-                          {openMenuId === u.id && (
-                            <div className="absolute right-0 top-8 z-20 w-44 rounded-xl border border-gray-700 bg-gray-900 py-1 shadow-xl">
-                              {/* Role */}
-                              <button
-                                onClick={() => { setPending({ key: 'role', user: u }); setOpenMenuId(null); }}
-                                className="flex w-full items-center gap-2 px-3 py-2 text-xs text-gray-300 hover:bg-gray-800 hover:text-white"
-                              >
-                                {u.role === 'admin' ? 'Make User' : 'Make Admin'}
-                              </button>
-
-                              {/* Tier sub-section */}
-                              <div className="border-t border-gray-800 px-3 py-1 text-[10px] font-medium uppercase tracking-wider text-gray-600">
-                                Set Tier
-                              </div>
-                              {TIER_OPTIONS.filter(t => t !== u.tier).map(t => (
-                                <button
-                                  key={t}
-                                  onClick={() => { setPending({ key: 'tier', user: u, extra: t }); setOpenMenuId(null); }}
-                                  className="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-gray-300 hover:bg-gray-800 hover:text-white capitalize"
-                                >
-                                  {t}
-                                </button>
-                              ))}
-
-                              {/* Suspend / Unsuspend */}
-                              <div className="border-t border-gray-800 mt-1 pt-1">
-                                {u.is_suspended ? (
-                                  <button
-                                    onClick={() => { setPending({ key: 'unsuspend', user: u }); setOpenMenuId(null); }}
-                                    className="flex w-full items-center gap-2 px-3 py-2 text-xs text-green-400 hover:bg-gray-800"
-                                  >
-                                    <ShieldCheck className="h-3.5 w-3.5" /> Unsuspend
-                                  </button>
-                                ) : (
-                                  <button
-                                    onClick={() => { setPending({ key: 'suspend', user: u }); setOpenMenuId(null); }}
-                                    className="flex w-full items-center gap-2 px-3 py-2 text-xs text-yellow-400 hover:bg-gray-800"
-                                  >
-                                    <ShieldOff className="h-3.5 w-3.5" /> Suspend
-                                  </button>
-                                )}
-                                <button
-                                  onClick={() => { setPending({ key: 'reset_quota', user: u }); setOpenMenuId(null); }}
-                                  className="flex w-full items-center gap-2 px-3 py-2 text-xs text-gray-300 hover:bg-gray-800"
-                                >
-                                  <RefreshCw className="h-3.5 w-3.5" /> Reset Quota
-                                </button>
-                                <button
-                                  onClick={() => { setPending({ key: 'delete', user: u }); setOpenMenuId(null); }}
-                                  className="flex w-full items-center gap-2 px-3 py-2 text-xs text-red-400 hover:bg-red-500/10"
-                                >
-                                  <Trash2 className="h-3.5 w-3.5" /> Delete User
-                                </button>
-                              </div>
-                            </div>
-                          )}
-                        </div>
+                        <button
+                          onClick={e => openMenu(u, e.currentTarget)}
+                          className="flex items-center gap-1 rounded-lg border border-gray-700 px-2 py-1 text-xs text-gray-400 hover:border-[#00D4AA] hover:text-[#00D4AA] transition-colors"
+                        >
+                          Actions <ChevronDown className="h-3 w-3" />
+                        </button>
                       </td>
                     </tr>
 
-                    {/* Confirm modal row */}
                     {pending?.user.id === u.id && (
                       <tr className="border-b border-gray-800/50 bg-gray-800/20">
                         <td colSpan={7} className="px-5 py-2">
