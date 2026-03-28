@@ -29,7 +29,7 @@ const ChatPage = () => {
   // We create the conversation, navigate to its URL, then fire the message
   // only after conversationId has updated in the component — avoiding the
   // race condition where sendMessage runs while conversationId is still undefined.
-  const pendingMessageRef = useRef<{ content: string; convId: string } | null>(null);
+  const pendingMessageRef = useRef<{ content: string; convId: string; attachmentContext?: string } | null>(null);
   const refetchUser = useCallback(async () => {
     if (!clerkUser) return;
     const result = (await supabase
@@ -67,10 +67,10 @@ const ChatPage = () => {
       pendingMessageRef.current &&
       conversationId === pendingMessageRef.current.convId
     ) {
-      const { content, convId } = pendingMessageRef.current;
+      const { content, convId, attachmentContext } = pendingMessageRef.current;
       pendingMessageRef.current = null;
       setTimeout(() => {
-        sendMessage(content, convId);
+        sendMessage(content, convId, attachmentContext);
       }, 0);
     }
   }, [conversationId, sendMessage]);
@@ -111,11 +111,11 @@ const ChatPage = () => {
     [navigate]
   );
   const handleSendMessage = useCallback(
-    async (content: string) => {
+    async (content: string, attachmentContext?: string) => {
       if (!dbUser) return;
       // Existing conversation: send immediately
       if (conversationId) {
-        await sendMessage(content, conversationId);
+        await sendMessage(content, conversationId, attachmentContext);
         refetchConversations();
         await refetchUser();
         return;
@@ -126,7 +126,7 @@ const ChatPage = () => {
       // messages on conversationId change) would wipe our optimistic messages.
       const newConv = await createConversation(dbUser.id);
       if (!newConv) return;
-      pendingMessageRef.current = { content, convId: newConv.id };
+      pendingMessageRef.current = { content, convId: newConv.id, attachmentContext };
       navigate(`/chat/${newConv.id}`, { replace: true });
       refetchConversations();
     },
