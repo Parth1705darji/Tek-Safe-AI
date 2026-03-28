@@ -281,19 +281,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const historyForRAG = (history ?? []).map(({ role, content }) => ({ role, content }));
     const ragMessages = buildRAGPrompt(kbChunks, historyForRAG, message.trim());
 
-    // 7b. Inject active tool context into the system message
-    const TOOL_CONTEXT: Record<string, string> = {
-      threat_intel:
-        'USER HAS THREAT INTEL MODE ENABLED: Provide detailed threat intelligence. Include CVE numbers, MITRE ATT&CK technique IDs, CVSS scores, and known IOCs where relevant.',
-      certin_mode:
-        'USER HAS CERT-In MODE ENABLED: Emphasize CERT-In compliance. Reference the 6-hour mandatory incident reporting window, CERT-In Information Security Practices, and relevant CERT-In advisories.',
-      report_builder:
-        'USER HAS REPORT BUILDER ENABLED: Structure your response as a formal security report with sections: Executive Summary, Technical Findings, Risk Level, and Recommendations.',
-    };
-    const extraContext = activeTools
-      .map((t) => TOOL_CONTEXT[t])
-      .filter(Boolean)
-      .join('\n\n');
+    // 7b. Inject active skill context into the system message (fetched from DB)
+    let extraContext = '';
+    if (activeTools.length > 0) {
+      try {
+        const { data: skillRows } = await supabaseAdmin
+          .from('skills')
+          .select('slug, system_prompt')
+          .in('slug', activeTools)
+          .eq('is_active', true);
+        if (skillRows && skillRows.length > 0) {
+          extraContext = skillRows.map((s: { slug: string; system_prompt: string }) => s.system_prompt).join('\n\n');
+        }
+      } catch (e) {
+        console.warn('Skills DB lookup failed (non-fatal):', (e as Error).message);
+      }
+    }
     if (extraContext && ragMessages[0]?.role === 'system') {
       ragMessages[0] = { ...ragMessages[0], content: ragMessages[0].content + '\n\n' + extraContext };
     }

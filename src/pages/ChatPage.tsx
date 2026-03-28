@@ -12,6 +12,7 @@ import { useSupabase } from '../hooks/useSupabase';
 import { DAILY_LIMITS } from '../lib/utils';
 import { exportAsWord, exportAsExcel, exportAsPdf, exportAsHtml } from '../lib/exportChat';
 import AnnouncementBanner from '../components/AnnouncementBanner';
+import SkillSelector from '../components/chat/SkillSelector';
 import type { User, Message } from '../types';
 const ChatPage = () => {
   const { conversationId } = useParams<{ conversationId?: string }>();
@@ -20,6 +21,7 @@ const ChatPage = () => {
   const { user: clerkUser, isLoaded } = useUser();
   const supabase = useSupabase();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [activeSkills, setActiveSkills] = useState<string[]>([]);
   const [dbUser, setDbUser] = useState<User | null>(null);
   const [dbUserLoading, setDbUserLoading] = useState(true);
   const [dbUserError, setDbUserError] = useState(false);
@@ -55,7 +57,7 @@ const ChatPage = () => {
     refetch: refetchConversations,
   } = useConversations(dbUser?.id);
   const { messages, isLoading, isStreaming, sendMessage, submitFeedback, stopGenerating, answerDiagnostic } =
-    useChat(conversationId, clerkUser?.id);
+    useChat(conversationId, clerkUser?.id, activeSkills);
   // After navigating to a new conversation URL, fire any queued message.
   // This runs once conversationId has settled to the new value, guaranteeing
   // that useChat's message-load effect has already cleared state for the
@@ -217,6 +219,9 @@ const ChatPage = () => {
               Unable to load your account. Please refresh the page or sign out and sign back in.
             </div>
           )}
+          <div className="px-4 pb-1 pt-0">
+            <SkillSelector activeSkills={activeSkills} onChange={setActiveSkills} />
+          </div>
           <ChatInput
             onSend={handleSendMessage}
             onStop={stopGenerating}

@@ -11,6 +11,26 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     process.env.SUPABASE_SERVICE_ROLE_KEY!
   );
 
+  // ── skills GET: public (no auth) returns active skills for chat UI ───────────
+  if (resource === 'skills' && req.method === 'GET') {
+    const isAdminRequest = (req.headers.authorization as string | undefined)?.startsWith('Bearer ');
+
+    if (!isAdminRequest) {
+      const { data, error } = await supabase
+        .from('skills')
+        .select('id, name, slug, description, icon, color, is_active, sort_order')
+        .eq('is_active', true)
+        .order('sort_order', { ascending: true });
+
+      if (error) {
+        if (error.code === '42P01') return res.status(200).json({ skills: [] });
+        return res.status(500).json({ error: error.message });
+      }
+      return res.status(200).json({ skills: data ?? [] });
+    }
+    // Authenticated request falls through to admin handler below
+  }
+
   // ── broadcast GET: public if no auth header, admin view if authenticated ─────
   if (resource === 'broadcast' && req.method === 'GET') {
     const isAdminRequest = (req.headers.authorization as string | undefined)?.startsWith('Bearer ');
@@ -123,6 +143,132 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         .eq('id', id);
 
       if (error) return res.status(500).json({ error: error.message });
+      return res.status(200).json({ ok: true });
+    }
+
+    return res.status(405).end();
+  }
+
+  // ── skills: GET all (admin) | POST create | PUT update | DELETE ──────────────
+  if (resource === 'skills') {
+    if (req.method === 'GET') {
+      // Admin: return all skills including inactive
+      const { data, error } = await supabase
+        .from('skills')
+        .select('*')
+        .order('sort_order', { ascending: true });
+
+      if (error) {
+        if (error.code === '42P01') return res.status(200).json({ skills: [] });
+        return res.status(500).json({ error: error.message });
+      }
+      return res.status(200).json({ skills: data ?? [] });
+    }
+
+    if (req.method === 'POST') {
+      const { name, slug, description, icon, color, system_prompt, sort_order } = req.body as {
+        name?: string;
+        slug?: string;
+        description?: string;
+        icon?: string;
+        color?: string;
+        system_prompt?: string;
+        sort_order?: number;
+      };
+      if (!name?.trim()) return res.status(400).json({ error: 'name is required' });
+      if (!slug?.trim()) return res.status(400).json({ error: 'slug is required' });
+      if (!system_prompt?.trim()) return res.status(400).json({ error: 'system_prompt is required' });
+
+      const { data, error } = await supabase
+        .from('skills')
+        .insert({
+          name: name.trim(),
+          slug: slug.trim().toLowerCase().replace(/\s+/g, '_'),
+          description: description?.trim() ?? '',
+          icon: icon?.trim() ?? '🛡️',
+          color: color?.trim() ?? '#00D4AA',
+          system_prompt: system_prompt.trim(),
+          sort_order: sort_order ?? 99,
+          is_active: true,
+          created_by_email: admin.email,
+        })
+        .select()
+        .single();
+
+      if (error) {
+        if (error.code === '42P01') {
+          return res.status(503).json({ error: 'Run SQL migration first to create the skills table.' });
+        }
+        if (error.code === '23505') return res.status(409).json({ error: 'Slug already exists' });
+        return res.status(500).json({ error: error.message });
+      }
+
+      await supabase.from('admin_audit_log').insert({
+        admin_email: admin.email,
+        action: 'skill_created',
+        payload: { skill_id: data.id, name: data.name, slug: data.slug },
+      }).catch(() => {});
+
+      return res.status(201).json({ skill: data });
+    }
+
+    if (req.method === 'PUT') {
+      const { id } = req.query as { id?: string };
+      if (!id) return res.status(400).json({ error: 'Missing id' });
+
+      const { name, description, icon, color, system_prompt, sort_order, is_active } = req.body as {
+        name?: string;
+        description?: string;
+        icon?: string;
+        color?: string;
+        system_prompt?: string;
+        sort_order?: number;
+        is_active?: boolean;
+      };
+
+      const updates: Record<string, unknown> = {};
+      if (name !== undefined) updates.name = name.trim();
+      if (description !== undefined) updates.description = description.trim();
+      if (icon !== undefined) updates.icon = icon.trim();
+      if (color !== undefined) updates.color = color.trim();
+      if (system_prompt !== undefined) updates.system_prompt = system_prompt.trim();
+      if (sort_order !== undefined) updates.sort_order = sort_order;
+      if (is_active !== undefined) updates.is_active = is_active;
+
+      if (Object.keys(updates).length === 0) return res.status(400).json({ error: 'No fields to update' });
+
+      const { data, error } = await supabase
+        .from('skills')
+        .update(updates)
+        .eq('id', id)
+        .select()
+        .single();
+
+      if (error) return res.status(500).json({ error: error.message });
+      if (!data) return res.status(404).json({ error: 'Skill not found' });
+
+      await supabase.from('admin_audit_log').insert({
+        admin_email: admin.email,
+        action: 'skill_updated',
+        payload: { skill_id: id, changes: updates },
+      }).catch(() => {});
+
+      return res.status(200).json({ skill: data });
+    }
+
+    if (req.method === 'DELETE') {
+      const { id } = req.query as { id?: string };
+      if (!id) return res.status(400).json({ error: 'Missing id' });
+
+      const { error } = await supabase.from('skills').delete().eq('id', id);
+      if (error) return res.status(500).json({ error: error.message });
+
+      await supabase.from('admin_audit_log').insert({
+        admin_email: admin.email,
+        action: 'skill_deleted',
+        payload: { skill_id: id },
+      }).catch(() => {});
+
       return res.status(200).json({ ok: true });
     }
 
