@@ -6,7 +6,7 @@ import { writeAuditLog } from '../_lib/auditLog.js';
 
 export const config = { api: { bodyParser: true } };
 
-type Action = 'set_tier' | 'suspend' | 'unsuspend' | 'reset_quota' | 'delete_user';
+type Action = 'set_role' | 'set_tier' | 'suspend' | 'unsuspend' | 'reset_quota' | 'delete_user';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') return res.status(405).end();
@@ -22,6 +22,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     action?: Action;
     clerkId?: string;
     tier?: string;
+    role?: 'user' | 'admin';
     reason?: string;
   };
 
@@ -37,6 +38,31 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   );
 
   const ip = (req.headers['x-forwarded-for'] as string | undefined)?.split(',')[0].trim();
+
+  // ── set_role ──────────────────────────────────────────────────────────────
+  if (action === 'set_role') {
+    const { role } = body;
+    if (role !== 'user' && role !== 'admin') {
+      return res.status(400).json({ error: 'Role must be "user" or "admin"' });
+    }
+    if (!process.env.CLERK_SECRET_KEY) {
+      return res.status(500).json({ error: 'Clerk not configured' });
+    }
+    const { data: prev } = await supabase
+      .from('users').select('role').eq('clerk_id', clerkId).single();
+
+    const clerk = createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY! });
+    await clerk.users.updateUserMetadata(clerkId, { publicMetadata: { role } });
+    const { error } = await supabase.from('users').update({ role }).eq('clerk_id', clerkId);
+    if (error) return res.status(500).json({ error: error.message });
+
+    await writeAuditLog(supabase, {
+      adminClerkId: admin.clerkId, adminEmail: admin.email,
+      action: 'set_role', targetType: 'user', targetId: clerkId,
+      payload: { previousRole: prev?.role ?? null, newRole: role }, ipAddress: ip,
+    });
+    return res.status(200).json({ ok: true, role });
+  }
 
   // ── set_tier ──────────────────────────────────────────────────────────────
   if (action === 'set_tier') {

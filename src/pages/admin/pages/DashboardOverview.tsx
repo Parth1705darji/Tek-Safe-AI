@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom';
-import { Users, MessageSquare, Shield, ThumbsUp, Database, Activity, RefreshCw } from 'lucide-react';
+import { Users, MessageSquare, Shield, ThumbsUp, Database, Activity, RefreshCw, UserCheck, Megaphone, ClipboardList } from 'lucide-react';
 import { useAdminStats } from '../../../hooks/useAdminStats';
 import { StatCard } from '../components/StatCard';
 import { LoadingSkeleton } from '../components/LoadingSkeleton';
@@ -61,18 +61,18 @@ const DashboardOverview = () => {
               icon={Users}
             />
             <StatCard
+              title="Active Users (24h)"
+              value={stats?.users.active24h ?? 0}
+              trend={`${stats?.users.active7d ?? 0} active this week`}
+              icon={UserCheck}
+              iconColor="text-[#00D4AA]"
+            />
+            <StatCard
               title="AI Responses"
               value={stats?.messages.total ?? 0}
               trend={`+${stats?.messages.today ?? 0} today · +${stats?.messages.thisWeek ?? 0} this week`}
               icon={MessageSquare}
               iconColor="text-blue-400"
-            />
-            <StatCard
-              title="Security Tools Used"
-              value={toolsTotal}
-              subtitle={Object.entries(stats?.tools ?? {}).map(([k, v]) => `${k.replace('_', ' ')}: ${v}`).join(' · ')}
-              icon={Shield}
-              iconColor="text-purple-400"
             />
             <StatCard
               title="Feedback Score"
@@ -89,11 +89,11 @@ const DashboardOverview = () => {
               iconColor="text-orange-400"
             />
             <StatCard
-              title="System Status"
-              value="Operational"
-              subtitle="All services running"
+              title="Suspended Users"
+              value={stats?.users.suspended ?? 0}
+              subtitle={stats?.users.suspended ? 'Accounts suspended' : 'No suspended accounts'}
               icon={Activity}
-              iconColor="text-green-400"
+              iconColor={stats?.users.suspended ? 'text-red-400' : 'text-green-400'}
             />
           </>
         )}
@@ -166,28 +166,68 @@ const DashboardOverview = () => {
         </div>
       </div>
 
+      {/* Tool usage breakdown */}
+      {!loading && toolsTotal > 0 && (
+        <div className="rounded-2xl border border-gray-800 bg-gray-900 p-5">
+          <div className="flex items-center gap-2 mb-4">
+            <Shield className="h-4 w-4 text-purple-400" />
+            <h2 className="font-semibold text-white">Security Tool Usage</h2>
+            <span className="ml-auto text-xs text-gray-500">{toolsTotal} total uses</span>
+          </div>
+          <div className="space-y-3">
+            {Object.entries(stats?.tools ?? {})
+              .sort(([, a], [, b]) => b - a)
+              .map(([tool, count]) => {
+                const pct = Math.round((count / toolsTotal) * 100);
+                return (
+                  <div key={tool}>
+                    <div className="flex justify-between text-xs mb-1">
+                      <span className="text-gray-300 capitalize">{tool.replace(/_/g, ' ')}</span>
+                      <span className="text-gray-500">{count} ({pct}%)</span>
+                    </div>
+                    <div className="h-1.5 rounded-full bg-gray-800">
+                      <div className="h-1.5 rounded-full bg-purple-500/70" style={{ width: `${pct}%` }} />
+                    </div>
+                  </div>
+                );
+              })}
+          </div>
+        </div>
+      )}
+
       {/* Quick Actions */}
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <button
           onClick={() => navigate('/admin/kb')}
           className="rounded-2xl border border-gray-800 bg-gray-900 p-4 text-left hover:border-[#00D4AA]/50 transition-colors"
         >
+          <Database className="h-5 w-5 text-orange-400 mb-2" />
           <p className="font-medium text-white">Add KB Article</p>
-          <p className="text-sm text-gray-400">Add content to the knowledge base</p>
+          <p className="text-sm text-gray-400">Add to knowledge base</p>
         </button>
         <button
           onClick={() => navigate('/admin/users')}
           className="rounded-2xl border border-gray-800 bg-gray-900 p-4 text-left hover:border-[#00D4AA]/50 transition-colors"
         >
+          <Users className="h-5 w-5 text-blue-400 mb-2" />
           <p className="font-medium text-white">Manage Users</p>
           <p className="text-sm text-gray-400">View, search and update users</p>
         </button>
         <button
-          onClick={() => navigate('/admin/system')}
+          onClick={() => navigate('/admin/broadcast')}
           className="rounded-2xl border border-gray-800 bg-gray-900 p-4 text-left hover:border-[#00D4AA]/50 transition-colors"
         >
-          <p className="font-medium text-white">System Health</p>
-          <p className="text-sm text-gray-400">Check API keys and DB status</p>
+          <Megaphone className="h-5 w-5 text-[#00D4AA] mb-2" />
+          <p className="font-medium text-white">Broadcast</p>
+          <p className="text-sm text-gray-400">Post announcements to users</p>
+        </button>
+        <button
+          onClick={() => navigate('/admin/audit-log')}
+          className="rounded-2xl border border-gray-800 bg-gray-900 p-4 text-left hover:border-[#00D4AA]/50 transition-colors"
+        >
+          <ClipboardList className="h-5 w-5 text-yellow-400 mb-2" />
+          <p className="font-medium text-white">Audit Log</p>
+          <p className="text-sm text-gray-400">Review admin actions</p>
         </button>
       </div>
     </div>

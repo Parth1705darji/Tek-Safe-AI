@@ -47,6 +47,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const thirtyDaysAgo = new Date(now.getTime() - 30 * 86400000).toISOString();
 
+  const last24h = new Date(now.getTime() - 86400000).toISOString();
+
   const [
     totalUsers,
     usersToday,
@@ -60,6 +62,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     kbDocuments,
     tsMessages,
     tsUsers,
+    suspendedUsers,
+    activeConvs24h,
+    activeConvs7d,
   ] = await Promise.all([
     supabase.from('users').select('id', { count: 'exact', head: true }),
     supabase.from('users').select('id', { count: 'exact', head: true }).gte('created_at', startOfToday),
@@ -73,6 +78,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     supabase.from('kb_documents').select('id, title, category, subcategory, tags, created_at').order('created_at', { ascending: false }),
     supabase.from('messages').select('created_at').eq('role', 'assistant').gte('created_at', thirtyDaysAgo),
     supabase.from('users').select('created_at').gte('created_at', thirtyDaysAgo),
+    supabase.from('users').select('id', { count: 'exact', head: true }).eq('is_suspended', true),
+    supabase.from('conversations').select('user_id').gte('updated_at', last24h),
+    supabase.from('conversations').select('user_id').gte('updated_at', startOfWeek),
   ]);
 
   const toolCounts: Record<string, number> = {};
@@ -100,11 +108,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return result;
   };
 
+  const activeUsers24h = new Set((activeConvs24h.data ?? []).map(c => c.user_id)).size;
+  const activeUsers7d = new Set((activeConvs7d.data ?? []).map(c => c.user_id)).size;
+
   return res.status(200).json({
     users: {
       total: totalUsers.count ?? 0,
       today: usersToday.count ?? 0,
       thisWeek: usersWeek.count ?? 0,
+      suspended: suspendedUsers.count ?? 0,
+      active24h: activeUsers24h,
+      active7d: activeUsers7d,
     },
     messages: {
       total: totalMessages.count ?? 0,
