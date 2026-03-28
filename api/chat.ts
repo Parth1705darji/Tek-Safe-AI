@@ -52,12 +52,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     message?: string;
     userId?: string;
     activeTools?: string[];
+    attachmentContext?: string;
   } | null;
 
   const conversationId = body?.conversationId;
   const message = body?.message;
   const userId = body?.userId;
   const activeTools: string[] = body?.activeTools ?? [];
+  const attachmentContext = body?.attachmentContext ?? '';
 
   if (!conversationId || !message?.trim() || !userId) {
     return res.status(400).json({ error: 'Missing required fields', body: JSON.stringify(body) });
@@ -322,6 +324,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
     if (extraContext && ragMessages[0]?.role === 'system') {
       ragMessages[0] = { ...ragMessages[0], content: ragMessages[0].content + '\n\n' + extraContext };
+    }
+
+    // 7d. Inject attachment context so AI can reference uploaded file content
+    if (attachmentContext && ragMessages[0]?.role === 'system') {
+      const attachmentSection = `\n\n## Attached File Content\nThe user has uploaded a file. The following is the extracted content — use it to answer their question:\n\n${attachmentContext}`;
+      ragMessages[0] = { ...ragMessages[0], content: ragMessages[0].content + attachmentSection };
     }
 
     // 7c. Inject pre-flight scan result so AI bases its advice on real scan data

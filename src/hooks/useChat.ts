@@ -57,7 +57,7 @@ export function useChat(conversationId?: string, clerkUserId?: string, activeToo
     };
   }, [conversationId, supabase]);
   const sendMessage = useCallback(
-    async (content: string, convId: string) => {
+    async (content: string, convId: string, attachmentContext?: string) => {
       if (!content.trim() || isStreaming || isLoading || !clerkUserId) return;
       // Optimistic user message — displayed immediately
       const optimisticUserMsg: Message = {
@@ -121,6 +121,7 @@ export function useChat(conversationId?: string, clerkUserId?: string, activeToo
             message: content.trim(),
             userId: clerkUserId,
             activeTools: activeTools ?? [],
+            ...(attachmentContext ? { attachmentContext } : {}),
           }),
           signal: ctrl.signal,
         });
