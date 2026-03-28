@@ -16,6 +16,8 @@ import {
   classifyInput,
   scanOutputForPII,
   isJailbreakResponse,
+  DEFAULT_GUARDRAIL_CONFIG,
+  type GuardrailConfig,
 } from '../lib/guardrails.js';
 
 // Body parser enabled (default for Vercel Node functions)
@@ -118,18 +120,24 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.end();
     }
 
-    // 2. Check rate limit (fetch from DB settings, fallback to hardcoded)
+    // 2. Fetch runtime settings from DB (tier limits + guardrail config), fallback to defaults
     let LIMITS: Record<string, number> = { free: 20, pro: 500, premium: Infinity };
+    let guardrailConfig: GuardrailConfig = { ...DEFAULT_GUARDRAIL_CONFIG };
     try {
-      const { data: settingRow } = await supabaseAdmin
-        .from('app_settings').select('value').eq('key', 'tier_limits').single();
-      if (settingRow?.value && typeof settingRow.value === 'object') {
-        const dbLimits = settingRow.value as Record<string, number>;
+      const [tierRow, guardrailRow] = await Promise.all([
+        supabaseAdmin.from('app_settings').select('value').eq('key', 'tier_limits').single(),
+        supabaseAdmin.from('app_settings').select('value').eq('key', 'guardrail_config').single(),
+      ]);
+      if (tierRow.data?.value && typeof tierRow.data.value === 'object') {
+        const dbLimits = tierRow.data.value as Record<string, number>;
         LIMITS = { ...LIMITS, ...Object.fromEntries(
           Object.entries(dbLimits).map(([k, v]) => [k, v === -1 ? Infinity : v])
         )};
       }
-    } catch { /* non-fatal — table may not exist yet */ }
+      if (guardrailRow.data?.value && typeof guardrailRow.data.value === 'object') {
+        guardrailConfig = { ...DEFAULT_GUARDRAIL_CONFIG, ...(guardrailRow.data.value as Partial<GuardrailConfig>) };
+      }
+    } catch { /* non-fatal */ }
     const limit = LIMITS[user.tier] ?? 50;
     const now = new Date();
     const resetAt = user.daily_message_reset_at ? new Date(user.daily_message_reset_at) : null;
@@ -141,7 +149,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     // ── Guardrail: input checks ───────────────────────────────────────────────
-    if (containsPII(message.trim())) {
+    if (guardrailConfig.pii_check && containsPII(message.trim())) {
       const aiMsg = "Please don't share sensitive information like passwords, OTPs, or Aadhaar numbers for your own security.";
       const msgId = await saveBlocked('[Message blocked: contains sensitive information]', `⚠️ ${aiMsg}`);
       supabaseAdmin.from('analytics_events').insert({ user_id: user.id, event_type: 'guardrail_block', event_data: { type: 'pii', conversation_id: conversationId } }).catch(() => {});
@@ -150,22 +158,24 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.end();
     }
 
-    const classification = await classifyInput(message.trim(), DEEPSEEK_KEY);
-    if (classification === 'off_topic') {
-      const aiMsg = "I specialise in tech support and cybersecurity. I can't help with that, but feel free to ask about device issues, security threats, or online safety!";
-      const msgId = await saveBlocked(message.trim(), `ℹ️ ${aiMsg}`);
-      supabaseAdmin.from('analytics_events').insert({ user_id: user.id, event_type: 'guardrail_block', event_data: { type: 'off_topic', conversation_id: conversationId } }).catch(() => {});
-      send({ type: 'info', message: aiMsg });
-      send({ type: 'done', messageId: msgId });
-      return res.end();
-    }
-    if (classification === 'unsafe') {
-      const aiMsg = "I can't help with that request.";
-      const msgId = await saveBlocked('[Message blocked: content policy violation]', `⚠️ ${aiMsg}`);
-      supabaseAdmin.from('analytics_events').insert({ user_id: user.id, event_type: 'guardrail_block', event_data: { type: 'unsafe', conversation_id: conversationId } }).catch(() => {});
-      send({ type: 'error', message: aiMsg });
-      send({ type: 'done', messageId: msgId });
-      return res.end();
+    if (guardrailConfig.off_topic_check || guardrailConfig.unsafe_check) {
+      const classification = await classifyInput(message.trim(), DEEPSEEK_KEY, guardrailConfig.off_topic_strictness);
+      if (guardrailConfig.off_topic_check && classification === 'off_topic') {
+        const aiMsg = "I specialise in tech support and cybersecurity. I can't help with that, but feel free to ask about device issues, security threats, or online safety!";
+        const msgId = await saveBlocked(message.trim(), `ℹ️ ${aiMsg}`);
+        supabaseAdmin.from('analytics_events').insert({ user_id: user.id, event_type: 'guardrail_block', event_data: { type: 'off_topic', conversation_id: conversationId } }).catch(() => {});
+        send({ type: 'info', message: aiMsg });
+        send({ type: 'done', messageId: msgId });
+        return res.end();
+      }
+      if (guardrailConfig.unsafe_check && classification === 'unsafe') {
+        const aiMsg = "I can't help with that request.";
+        const msgId = await saveBlocked('[Message blocked: content policy violation]', `⚠️ ${aiMsg}`);
+        supabaseAdmin.from('analytics_events').insert({ user_id: user.id, event_type: 'guardrail_block', event_data: { type: 'unsafe', conversation_id: conversationId } }).catch(() => {});
+        send({ type: 'error', message: aiMsg });
+        send({ type: 'done', messageId: msgId });
+        return res.end();
+      }
     }
     // classification === 'safe' → continue (no DB write, no rate limit increment on blocked messages)
 
@@ -364,7 +374,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const diagnostic = parseDiagnosticTrigger(fullContent);
 
     // ── Guardrail: output checks ──────────────────────────────────────────────
-    let safeContent = scanOutputForPII(fullContent);
+    let safeContent = scanOutputForPII(fullContent, guardrailConfig.output_pii_masking);
     if (isJailbreakResponse(safeContent)) {
       safeContent = 'I can only assist with tech support and cybersecurity topics.';
     }

@@ -9,6 +9,22 @@ import { createChatCompletion } from './deepseek.js';
 
 export type InputClassification = 'safe' | 'off_topic' | 'unsafe';
 
+export type GuardrailConfig = {
+  pii_check: boolean;
+  off_topic_check: boolean;
+  unsafe_check: boolean;
+  output_pii_masking: boolean;
+  off_topic_strictness: 'low' | 'medium' | 'high';
+};
+
+export const DEFAULT_GUARDRAIL_CONFIG: GuardrailConfig = {
+  pii_check: true,
+  off_topic_check: true,
+  unsafe_check: true,
+  output_pii_masking: true,
+  off_topic_strictness: 'medium',
+};
+
 // ─── Layer 2a: PII Detection (regex, synchronous) ─────────────────────────────
 
 const PII_PATTERNS: RegExp[] = [
@@ -27,8 +43,18 @@ export function containsPII(text: string): boolean {
 
 // ─── Layer 2b: Input Classification (LLM-based, async) ────────────────────────
 
-export const CLASSIFICATION_SYSTEM_PROMPT =
-  `You are a content classifier for a Tech Support and Cybersecurity assistant.
+const STRICTNESS_ADDENDUM: Record<string, string> = {
+  low: `
+IMPORTANT — PERMISSIVE mode is active. Be very generous with "safe".
+Only classify as off_topic if the message is completely and obviously unrelated to technology or security (e.g. a recipe, a sports score, a relationship question with zero tech angle). When in doubt, always choose safe.`,
+  medium: `
+When in doubt between safe and off_topic, always choose safe.`,
+  high: `
+IMPORTANT — STRICT mode is active. Classify as off_topic anything not directly about technology, software, cybersecurity, or India-specific digital/financial safety. General knowledge, science, culture, and vague questions should be off_topic unless they have a clear tech/security angle.`,
+};
+
+export function buildClassificationPrompt(strictness: 'low' | 'medium' | 'high' = 'medium'): string {
+  return `You are a content classifier for a Tech Support and Cybersecurity assistant.
 Classify the user message into exactly one category:
 
 - safe: ALWAYS classify as safe if the message is any of:
@@ -43,18 +69,22 @@ Classify the user message into exactly one category:
 - off_topic: cooking, relationships, entertainment, general knowledge unrelated to tech, creative writing, non-security finance, politics, sports — anything clearly not tech, security, or conversation about this assistant
 
 - unsafe: hacking specific targets without permission, creating malware, bypassing security for unauthorized access, social engineering attack instructions, CSAM, violence
-
-When in doubt between safe and off_topic, always choose safe.
+${STRICTNESS_ADDENDUM[strictness]}
 Respond with ONLY ONE WORD: safe, off_topic, or unsafe`;
+}
+
+// Backward-compat export
+export const CLASSIFICATION_SYSTEM_PROMPT = buildClassificationPrompt('medium');
 
 export async function classifyInput(
   message: string,
-  apiKey: string
+  apiKey: string,
+  strictness: 'low' | 'medium' | 'high' = 'medium'
 ): Promise<InputClassification> {
   const classify = createChatCompletion(
     {
       messages: [
-        { role: 'system', content: CLASSIFICATION_SYSTEM_PROMPT },
+        { role: 'system', content: buildClassificationPrompt(strictness) },
         { role: 'user', content: message.slice(0, 500) },
       ],
       temperature: 0.0,
@@ -65,14 +95,11 @@ export async function classifyInput(
   const timeout = new Promise<string>((resolve) => setTimeout(() => resolve('timeout'), 5000));
   try {
     const raw = await Promise.race([classify, timeout]);
-    // Normalise: lowercase, collapse whitespace to underscore, strip non-alpha
     const label = raw.toLowerCase().trim().replace(/\s+/g, '_').replace(/[^a-z_]/g, '');
-    // Substring match handles responses like "off_topic." or "  unsafe  "
     if (label.includes('unsafe')) return 'unsafe';
     if (label.includes('off_topic') || label.includes('offtopic')) return 'off_topic';
     return 'safe';
   } catch (err) {
-    // Fail open — a DeepSeek outage should not block legitimate users
     console.warn('classifyInput failed, defaulting to safe:', (err as Error).message);
     return 'safe';
   }
@@ -85,7 +112,8 @@ const OUTPUT_PII_REPLACEMENTS: Array<{ pattern: RegExp; replacement: string }> =
   { pattern: /\b(?:\d[ -]?){13,19}\b/g, replacement: '[CARD NUMBER REDACTED]' },
 ];
 
-export function scanOutputForPII(text: string): string {
+export function scanOutputForPII(text: string, enabled = true): string {
+  if (!enabled) return text;
   return OUTPUT_PII_REPLACEMENTS.reduce(
     (t, { pattern, replacement }) => t.replace(pattern, replacement),
     text
