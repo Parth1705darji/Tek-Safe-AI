@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useAdminToken } from './useAdminToken';
 
 export interface AdminStats {
-  users: { total: number; today: number; thisWeek: number };
+  users: { total: number; today: number; thisWeek: number; suspended: number; active24h: number; active7d: number };
   messages: { total: number; today: number; thisWeek: number };
   tools: Record<string, number>;
   feedback: { up: number; down: number };

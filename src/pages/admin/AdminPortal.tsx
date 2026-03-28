@@ -6,6 +6,8 @@ import UserManagement from './pages/UserManagement';
 import ConversationBrowser from './pages/ConversationBrowser';
 import AnalyticsPage from './pages/AnalyticsPage';
 import SystemHealth from './pages/SystemHealth';
+import AuditLog from './pages/AuditLog';
+import BroadcastPage from './pages/BroadcastPage';
 
 const AdminPortal = () => {
   return (
@@ -16,6 +18,8 @@ const AdminPortal = () => {
         <Route path="users" element={<UserManagement />} />
         <Route path="conversations" element={<ConversationBrowser />} />
         <Route path="analytics" element={<AnalyticsPage />} />
+        <Route path="broadcast" element={<BroadcastPage />} />
+        <Route path="audit-log" element={<AuditLog />} />
         <Route path="system" element={<SystemHealth />} />
         <Route path="*" element={<Navigate to="/admin" replace />} />
       </Routes>

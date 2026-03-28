@@ -1,5 +1,4 @@
 import { useState, Fragment } from 'react';
-import { useAuth } from '@clerk/react';
 import {
   Search, ChevronLeft, ChevronRight, Download,
   ShieldOff, ShieldCheck, RefreshCw, Trash2, ChevronDown,
@@ -21,7 +20,6 @@ interface PendingAction {
 const TIER_OPTIONS = ['free', 'pro', 'team', 'premium'] as const;
 
 const UserManagement = () => {
-  const { getToken } = useAuth();
   const adminFetch = useAdminToken();
 
   const [search, setSearch] = useState('');
@@ -37,15 +35,14 @@ const UserManagement = () => {
   const [acting, setActing] = useState(false);
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
 
-  // ── Role change (uses separate set-role endpoint) ──────────────────────────
+  // ── Role change ────────────────────────────────────────────────────────────
   const handleRoleChange = async (u: AdminUser, newRole: 'user' | 'admin') => {
     setActing(true);
     try {
-      const token = await getToken();
-      const res = await fetch('/api/admin/set-role', {
+      const res = await adminFetch('/api/admin/user-actions', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token ?? ''}` },
-        body: JSON.stringify({ targetUserId: u.clerk_id, role: newRole }),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'set_role', clerkId: u.clerk_id, role: newRole }),
       });
       if (!res.ok) {
         const err = await res.json();
