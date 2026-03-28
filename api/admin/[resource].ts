@@ -5,18 +5,35 @@ import { verifyAdminRequest, sendAuthError } from '../_lib/adminAuth.js';
 export const config = { api: { bodyParser: true } };
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
+  const resource = req.query.resource as string;
+  const supabase = createClient(
+    process.env.VITE_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  );
+
+  // ── broadcast GET is public — users need to read active announcements ───────
+  if (resource === 'broadcast' && req.method === 'GET') {
+    const { data, error } = await supabase
+      .from('announcements')
+      .select('id, message, created_at, expires_at')
+      .eq('is_active', true)
+      .or(`expires_at.is.null,expires_at.gt.${new Date().toISOString()}`)
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      if (error.code === '42P01') return res.status(200).json({ announcements: [] });
+      return res.status(500).json({ error: error.message });
+    }
+    return res.status(200).json({ announcements: data ?? [] });
+  }
+
+  // All other routes require admin auth
   let admin;
   try {
     admin = await verifyAdminRequest(req);
   } catch (e) {
     return sendAuthError(res, e);
   }
-
-  const resource = req.query.resource as string;
-  const supabase = createClient(
-    process.env.VITE_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-  );
 
   // ── audit-log: GET /api/admin/audit-log ────────────────────────────────────
   if (resource === 'audit-log') {
@@ -47,11 +64,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     });
   }
 
-  // ── broadcast: GET|POST|DELETE /api/admin/broadcast ───────────────────────
+  // ── broadcast: POST|DELETE /api/admin/broadcast (GET handled above) ─────────
   if (resource === 'broadcast') {
     if (req.method === 'GET') {
-      // Public-accessible version: no admin check needed for reading active announcements.
-      // But we're behind verifyAdminRequest here; the chat UI uses a separate public endpoint.
+      // Admin view: return all announcements including inactive
       const { data, error } = await supabase
         .from('announcements')
         .select('id, message, created_by_email, created_at, expires_at, is_active')
