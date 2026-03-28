@@ -11,6 +11,7 @@ import { useConversations } from '../hooks/useConversations';
 import { useSupabase } from '../hooks/useSupabase';
 import { DAILY_LIMITS } from '../lib/utils';
 import { exportAsWord, exportAsExcel, exportAsPdf, exportAsHtml } from '../lib/exportChat';
+import AnnouncementBanner from '../components/AnnouncementBanner';
 import type { User, Message } from '../types';
 const ChatPage = () => {
   const { conversationId } = useParams<{ conversationId?: string }>();
@@ -198,6 +199,7 @@ const ChatPage = () => {
           onClose={() => setSidebarOpen(false)}
         />
         <main className="flex flex-1 flex-col overflow-hidden">
+          <AnnouncementBanner />
           {messages.length === 0 && !isLoading ? (
             <WelcomeScreen onPromptClick={handleSendMessage} />
           ) : (
