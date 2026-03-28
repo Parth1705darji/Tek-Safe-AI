@@ -1,18 +1,17 @@
 /**
  * Admin authentication middleware.
  *
- * Uses Clerk's sessions.verifySession() API instead of verifyToken() to avoid
- * the JWKS network-fetch that verifyToken() requires on every cold start.
+ * Verification strategy (in priority order):
+ *  1. If CLERK_JWT_KEY is set → local RSA verification via verifyToken (no network calls)
+ *  2. Otherwise → sessions.verifySession via Clerk API (one network call per request)
  *
  * Flow:
  *  1. Extract Bearer token from Authorization header
- *  2. Decode JWT (no verification yet) to get the session ID (sid claim)
- *  3. Call clerk.sessions.verifySession(sessionId, token) — Clerk's API
- *     verifies the session AND the token in one call, returning the userId
- *  4. Confirm role === 'admin' in Supabase (source of truth)
+ *  2. Verify the JWT (locally or via Clerk API)
+ *  3. Confirm role === 'admin' in Supabase (source of truth)
  */
 
-import { createClerkClient } from '@clerk/backend';
+import { createClerkClient, verifyToken } from '@clerk/backend';
 import { createClient } from '@supabase/supabase-js';
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 
@@ -25,7 +24,6 @@ export interface AdminIdentity {
 function decodeJwtPayload(token: string): Record<string, unknown> {
   const parts = token.split('.');
   if (parts.length !== 3) throw new Error('Malformed JWT');
-  // Base64url → Base64
   const b64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
   const padded = b64 + '='.repeat((4 - (b64.length % 4)) % 4);
   return JSON.parse(Buffer.from(padded, 'base64').toString('utf8'));
@@ -46,18 +44,25 @@ export async function verifyAdminRequest(req: VercelRequest): Promise<AdminIdent
     throw Object.assign(new Error('Clerk not configured on server'), { status: 500 });
   }
 
-  // 2. Verify via Clerk API — more reliable than JWKS fetch in serverless
+  // 2. Verify the JWT and extract the Clerk user ID
   let clerkId: string;
   try {
-    const claims = decodeJwtPayload(token);
-    const sessionId = claims.sid as string | undefined;
-    if (!sessionId) throw new Error('Missing session ID (sid) in token');
-
-    const clerk = createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY! });
-    const session = await clerk.sessions.verifySession(sessionId, token);
-    clerkId = session.userId;
-  } catch {
-    throw Object.assign(new Error('Invalid or expired session token'), { status: 401 });
+    if (process.env.CLERK_JWT_KEY) {
+      // Local RSA verification — zero network calls, reliable in serverless cold starts
+      const payload = await verifyToken(token, { jwtKey: process.env.CLERK_JWT_KEY });
+      clerkId = payload.sub;
+    } else {
+      // Fallback: call Clerk's session verify API directly
+      const claims = decodeJwtPayload(token);
+      const sessionId = claims.sid as string | undefined;
+      if (!sessionId) throw new Error('Missing session ID (sid) in token');
+      const clerk = createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY! });
+      const session = await clerk.sessions.verifySession(sessionId, token);
+      clerkId = session.userId;
+    }
+  } catch (err) {
+    const detail = err instanceof Error ? err.message : String(err);
+    throw Object.assign(new Error(`Token verification failed: ${detail}`), { status: 401 });
   }
 
   // 3. Confirm role === 'admin' in Supabase
