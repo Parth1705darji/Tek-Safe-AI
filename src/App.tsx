@@ -17,6 +17,7 @@ const ChatPage = lazy(() => import('./pages/ChatPage'));
 const ProfilePage = lazy(() => import('./pages/ProfilePage'));
 const ToolsPage = lazy(() => import('./pages/ToolsPage'));
 const AdminPortal = lazy(() => import('./pages/admin/AdminPortal'));
+const InfrastructureFullPage = lazy(() => import('./pages/InfrastructureFullPage'));
 
 // Full-screen loader shown during lazy page loads
 function PageLoader() {
@@ -81,6 +82,16 @@ function App() {
                 <ProtectedRoute>
                   <AuthWrapper>
                     <ToolsPage />
+                  </AuthWrapper>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/infrastructure"
+              element={
+                <ProtectedRoute>
+                  <AuthWrapper>
+                    <InfrastructureFullPage />
                   </AuthWrapper>
                 </ProtectedRoute>
               }

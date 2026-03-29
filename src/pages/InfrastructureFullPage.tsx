@@ -1,25 +1,14 @@
 import { useState, useEffect, useCallback } from 'react';
-import { useParams, useNavigate, Navigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { useUser } from '@clerk/react';
 import Header from '../components/layout/Header';
 import Sidebar from '../components/layout/Sidebar';
-import BreachCheck from '../components/tools/BreachCheck';
-import UrlScanner from '../components/tools/UrlScanner';
-import IpChecker from '../components/tools/IpChecker';
 import InfrastructurePage from './InfrastructurePage';
 import { useConversations } from '../hooks/useConversations';
 import { useSupabase } from '../hooks/useSupabase';
 import type { User } from '../types';
 
-const TOOL_COMPONENTS: Record<string, React.ReactNode> = {
-  'breach-check': <BreachCheck />,
-  'url-scan': <UrlScanner />,
-  'ip-check': <IpChecker />,
-  'infrastructure': <InfrastructurePage />,
-};
-
-const ToolsPage = () => {
-  const { tool } = useParams<{ tool: string }>();
+const InfrastructureFullPage = () => {
   const navigate = useNavigate();
   const { user: clerkUser, isLoaded } = useUser();
   const supabase = useSupabase();
@@ -64,13 +53,6 @@ const ToolsPage = () => {
     [deleteConversation]
   );
 
-  const toolComponent = tool ? TOOL_COMPONENTS[tool] : null;
-
-  // Redirect unknown tool slugs to breach-check
-  if (!toolComponent) {
-    return <Navigate to="/tools/breach-check" replace />;
-  }
-
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-light-bg dark:bg-dark-bg">
       <Header onMenuClick={() => setSidebarOpen(true)} />
@@ -89,11 +71,11 @@ const ToolsPage = () => {
         />
 
         <main className="flex flex-1 flex-col overflow-y-auto">
-          {toolComponent}
+          <InfrastructurePage />
         </main>
       </div>
     </div>
   );
 };
 
-export default ToolsPage;
+export default InfrastructureFullPage;

@@ -18,6 +18,7 @@ import {
   FileText,
   TableProperties,
   Printer,
+  Network,
 } from 'lucide-react';
 import { cn, truncate } from '../../lib/utils';
 import type { GroupedConversations } from '../../hooks/useConversations';
@@ -211,6 +212,7 @@ const ROUTE_TOOLS = [
   { icon: Shield, label: 'Breach Check', route: '/tools/breach-check' },
   { icon: Link2, label: 'URL Scanner', route: '/tools/url-scan' },
   { icon: Globe, label: 'IP Checker', route: '/tools/ip-check' },
+  { icon: Network, label: 'Infrastructure', route: '/infrastructure' },
 ];
 
 // Tools that pre-fill chat with a security prompt
