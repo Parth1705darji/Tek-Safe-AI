@@ -303,8 +303,7 @@ export function useChat(conversationId?: string, clerkUserId?: string, activeToo
         .from('messages')
         .update({ diagnose_answered: true })
         .eq('id', messageId)
-        .then(() => {})
-        .catch(() => {});
+        .then(() => {}, () => {});
 
       // Send the answer as a new user message into the same conversation
       await sendMessage(answer, conversationId);
