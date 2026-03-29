@@ -135,6 +135,8 @@ export type InfrastructureAgent = {
   last_heartbeat: string | null;
   status: 'pending' | 'active' | 'offline';
   scan_interval_min: number;
+  rescan_requested: boolean;
+  rescan_requested_at: string | null;
   created_at: string;
 };
 
@@ -324,6 +326,8 @@ export interface Database {
           last_heartbeat?: string | null;
           status?: 'pending' | 'active' | 'offline';
           scan_interval_min?: number;
+          rescan_requested?: boolean;
+          rescan_requested_at?: string | null;
           created_at?: string;
         };
         Update: Partial<InfrastructureAgent>;

@@ -75,6 +75,7 @@ Ensure these are set in Vercel (or `.env.local` for dev):
 | `ABUSEIPDB_API_KEY` | Optional | IP reputation |
 | `RAZORPAY_KEY_ID` | Optional | Payments |
 | `VITE_CHATWOOT_WEBSITE_TOKEN` | Optional | Live chat widget |
+| `NVDAPI_KEY` | Optional | NIST NVD API key — increases CVE lookup rate limit from 300 to 2,000 req/30 sec. Get free key at https://nvd.nist.gov/developers/request-an-api-key |
 
 ---
 
